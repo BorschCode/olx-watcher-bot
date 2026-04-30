@@ -1,3 +1,4 @@
+![olx logo](docs/olx.svg)
 # OLX Categories Monitoring Telegram Bot
 
 Telegram-бот для автоматичного моніторингу рубрик OLX і сповіщення про нові оголошення за заданими параметрами.
