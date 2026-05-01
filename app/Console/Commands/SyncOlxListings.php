@@ -2,109 +2,112 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Category;
+use App\Enums\HttpMethod;
 use App\Models\Listing;
-use App\Models\Subscription;
+use App\Models\Watcher;
 use Illuminate\Console\Command;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class SyncOlxListings extends Command
 {
-    protected $signature = 'olx:sync';
+    protected $signature = 'olx:sync {--watcher= : Sync only a specific watcher ID}';
 
-    protected $description = 'Fetch new OLX listings for synced categories and notify Telegram subscribers';
+    protected $description = 'Fetch new OLX listings for all watchers and send Telegram notifications';
 
     private const LIMIT = 40;
 
-    private const OLX_API_BASE = 'https://www.olx.ua/api/v1/offers';
-
     public function handle(): int
     {
-        $categories = Category::where('sync', true)->get();
+        $query = Watcher::with('filterOptions', 'category');
 
-        if ($categories->isEmpty()) {
-            $this->info('No categories marked for sync.');
+        if ($watcherId = $this->option('watcher')) {
+            $query->where('id', $watcherId);
+        }
+
+        $watchers = $query->get();
+
+        if ($watchers->isEmpty()) {
+            $this->info('No watchers configured.');
 
             return self::SUCCESS;
         }
 
-        foreach ($categories as $category) {
-            $this->syncCategory($category);
+        foreach ($watchers as $watcher) {
+            $this->syncWatcher($watcher);
         }
 
         return self::SUCCESS;
     }
 
-    private function syncCategory(Category $category): void
+    private function syncWatcher(Watcher $watcher): void
     {
-        $this->info("Syncing: {$category->name}");
+        $label = "Watcher #{$watcher->id}".($watcher->category ? " – {$watcher->category->name}" : '');
+        $this->info("Syncing: {$label}");
 
-        $subscriptions = Subscription::where('category_id', $category->id)->get();
+        $offers = match ($watcher->method) {
+            HttpMethod::Get => $this->fetchViaRest($watcher),
+            HttpMethod::Post => $this->fetchViaGraphql($watcher),
+        };
 
-        if ($subscriptions->isEmpty()) {
-            $this->line('  No subscribers, skipping.');
-
+        if ($offers === null) {
             return;
         }
 
-        $offset = 0;
         $newCount = 0;
+        $latestId = null;
 
-        do {
-            $offers = $this->fetchOffers($category, $offset);
+        foreach ($offers as $offer) {
+            $olxId = (int) $offer['id'];
 
-            if ($offers === null) {
+            if ($watcher->last_seen_id && $olxId <= $watcher->last_seen_id) {
                 break;
             }
 
-            $foundExisting = false;
+            $latestId ??= $olxId;
 
-            foreach ($offers as $offer) {
-                if (Listing::where('url', $offer['url'])->exists()) {
-                    $foundExisting = true;
-                    break;
-                }
-
-                $listing = Listing::create([
-                    'category_id' => $category->id,
+            $listing = Listing::firstOrCreate(
+                ['url' => $offer['url']],
+                [
+                    'category_id' => $watcher->category_id,
                     'title' => $offer['title'],
-                    'url' => $offer['url'],
                     'price' => $this->extractPrice($offer),
                     'parsed_at' => now(),
-                ]);
+                ],
+            );
 
-                $this->sendToSubscribers($subscriptions, $listing);
+            if ($listing->wasRecentlyCreated) {
+                $this->sendNotification($watcher, $listing);
                 $newCount++;
             }
+        }
 
-            $offset += self::LIMIT;
-
-            // Stop paginating once we hit a known listing or got a partial page
-        } while (! $foundExisting && count($offers) === self::LIMIT);
+        if ($latestId !== null) {
+            $watcher->update(['last_seen_id' => $latestId]);
+        }
 
         $this->line("  Done. {$newCount} new listing(s).");
     }
 
-    /**
-     * @return array<int, array<string, mixed>>|null
-     */
-    private function fetchOffers(Category $category, int $offset): ?array
+    /** @return array<int, array<string, mixed>>|null */
+    private function fetchViaRest(Watcher $watcher): ?array
     {
+        if ($watcher->url === null) {
+            $this->warn('  No URL configured, skipping.');
+
+            return null;
+        }
+
         $params = array_merge(
-            $category->options ?? [],
-            ['offset' => $offset, 'limit' => self::LIMIT],
+            $watcher->filterParams(),
+            ['offset' => 0, 'limit' => self::LIMIT],
         );
 
-        $response = Http::get(self::OLX_API_BASE, $params);
+        $response = Http::get($watcher->url, $params);
 
         if (! $response->successful()) {
-            Log::error('OLX API error', [
-                'category' => $category->id,
-                'status' => $response->status(),
-            ]);
-            $this->error("  API error {$response->status()} for category {$category->name}");
+            Log::error('OLX REST API error', ['watcher' => $watcher->id, 'status' => $response->status()]);
+            $this->error("  REST API error {$response->status()}");
 
             return null;
         }
@@ -112,46 +115,63 @@ class SyncOlxListings extends Command
         return $response->json('data', []);
     }
 
-    /**
-     * @param  array<string, mixed>  $offer
-     */
+    /** @return array<int, array<string, mixed>>|null */
+    private function fetchViaGraphql(Watcher $watcher): ?array
+    {
+        if ($watcher->url === null || $watcher->request_body === null) {
+            $this->warn('  No URL or request body configured, skipping.');
+
+            return null;
+        }
+
+        $response = Http::withHeaders(['Content-Type' => 'application/json'])
+            ->post($watcher->url, $watcher->request_body);
+
+        if (! $response->successful()) {
+            Log::error('OLX GraphQL error', ['watcher' => $watcher->id, 'status' => $response->status()]);
+            $this->error("  GraphQL error {$response->status()}");
+
+            return null;
+        }
+
+        return $response->json('data.clientCompatibleObservedAds.data', []);
+    }
+
+    /** @param array<string, mixed> $offer */
     private function extractPrice(array $offer): ?int
     {
         foreach ($offer['params'] ?? [] as $param) {
             if ($param['key'] === 'price') {
-                return (int) ($param['value']['converted_value'] ?? $param['value']['value'] ?? 0) ?: null;
+                $value = $param['value']['converted_value'] ?? $param['value']['value'] ?? 0;
+
+                return (int) $value ?: null;
             }
         }
 
         return null;
     }
 
-    /**
-     * @param  Collection<int, Subscription>  $subscriptions
-     */
-    private function sendToSubscribers(Collection $subscriptions, Listing $listing): void
+    private function sendNotification(Watcher $watcher, Listing $listing): void
     {
         $token = config('services.telegram.bot_token');
 
         if (! $token) {
-            $this->warn('  TELEGRAM_BOT_TOKEN not set, skipping notifications.');
+            $this->warn('  TELEGRAM_BOT_TOKEN not set, skipping notification.');
 
             return;
         }
 
-        $text = implode("\n", [
+        $lines = array_filter([
             "🆕 <b>{$listing->title}</b>",
-            $listing->price ? '💰 '.number_format($listing->price, 0, '.', ' ').' грн' : '',
+            $listing->price ? '💰 '.number_format($listing->price, 0, '.', ' ').' грн' : null,
             "🔗 {$listing->url}",
         ]);
 
-        foreach ($subscriptions as $subscription) {
-            Http::post("https://api.telegram.org/bot{$token}/sendMessage", [
-                'chat_id' => $subscription->telegram_chat_id,
-                'text' => $text,
-                'parse_mode' => 'HTML',
-                'disable_web_page_preview' => false,
-            ]);
-        }
+        Http::post("https://api.telegram.org/bot{$token}/sendMessage", [
+            'chat_id' => $watcher->telegram_chat_id,
+            'text' => implode("\n", $lines),
+            'parse_mode' => 'HTML',
+            'disable_web_page_preview' => false,
+        ]);
     }
 }

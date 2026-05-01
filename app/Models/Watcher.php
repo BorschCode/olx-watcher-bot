@@ -73,6 +73,32 @@ class Watcher extends Model
             ->withPivot('value_from', 'value_to');
     }
 
+    /** @return array<string, mixed> */
+    public function filterParams(): array
+    {
+        $params = [];
+
+        foreach ($this->filterOptions as $option) {
+            if ($option->has_range) {
+                if ($option->pivot->value_from !== null) {
+                    $params[$option->key.':from'] = $option->pivot->value_from;
+                }
+                if ($option->pivot->value_to !== null) {
+                    $params[$option->key.':to'] = $option->pivot->value_to;
+                }
+            } elseif ($option->value !== null) {
+                $existing = $params[$option->key] ?? null;
+                $params[$option->key] = $existing === null
+                    ? $option->value
+                    : array_merge((array) $existing, [$option->value]);
+            } elseif ($option->pivot->value_from !== null) {
+                $params[$option->key] = $option->pivot->value_from;
+            }
+        }
+
+        return $params;
+    }
+
     public function finalUrl(): Attribute
     {
         return Attribute::make(
@@ -81,27 +107,7 @@ class Watcher extends Model
                     return null;
                 }
 
-                $params = [];
-
-                foreach ($this->filterOptions as $option) {
-                    if ($option->has_range) {
-                        if ($option->pivot->value_from !== null) {
-                            $params[$option->key.':from'] = $option->pivot->value_from;
-                        }
-                        if ($option->pivot->value_to !== null) {
-                            $params[$option->key.':to'] = $option->pivot->value_to;
-                        }
-                    } elseif ($option->value !== null) {
-                        $existing = $params[$option->key] ?? null;
-                        if ($existing === null) {
-                            $params[$option->key] = $option->value;
-                        } else {
-                            $params[$option->key] = array_merge((array) $existing, [$option->value]);
-                        }
-                    } elseif ($option->pivot->value_from !== null) {
-                        $params[$option->key] = $option->pivot->value_from;
-                    }
-                }
+                $params = $this->filterParams();
 
                 return empty($params)
                     ? $this->url
