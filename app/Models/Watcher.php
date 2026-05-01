@@ -107,6 +107,10 @@ class Watcher extends Model
                     return null;
                 }
 
+                if (str_contains($this->url, '?')) {
+                    return $this->url;
+                }
+
                 $params = $this->filterParams();
 
                 return empty($params)

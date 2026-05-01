@@ -12,6 +12,7 @@ class DatabaseSeeder extends Seeder
             AdminUserSeeder::class,
             ListingSeeder::class,
             FilterOptionSeeder::class,
+            WatcherSeeder::class,
         ]);
     }
 }
