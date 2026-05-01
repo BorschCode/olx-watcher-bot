@@ -3,45 +3,57 @@
 namespace App\Console\Commands;
 
 use App\Models\City;
-use App\Models\District;
-use Illuminate\Console\Attributes\Description;
-use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
-
-#[Signature('app:import-olx-locations')]
-#[Description('Command description')]
+use Illuminate\Support\Facades\Http;
 
 class ImportOlxLocations extends Command
 {
     protected $signature = 'olx:import-locations';
 
-    protected $description = 'Import OLX cities and districts';
+    protected $description = 'Import OLX cities from the locations sitemap';
 
-    public function handle()
+    public function handle(): int
     {
-        $data = config('olx_locations');
+        $xml = Http::get('https://www.olx.ua/sitemap-locations.xml')->body();
 
-        foreach ($data['cities'] as $slug => $city) {
+        $sitemap = simplexml_load_string($xml);
 
-            $cityModel = City::updateOrCreate(
-                ['slug' => $slug],
-                ['name' => $city['display']]
-            );
+        if ($sitemap === false) {
+            $this->error('Failed to parse sitemap XML.');
 
-            foreach ($city['districts'] as $district => $id) {
+            return self::FAILURE;
+        }
 
-                District::updateOrCreate(
-                    [
-                        'city_id' => $cityModel->id,
-                        'olx_id' => $id,
-                    ],
-                    [
-                        'name' => $district,
-                    ]
-                );
+        $imported = 0;
+        $skipped = 0;
+
+        foreach ($sitemap->url as $entry) {
+            $url = (string) $entry->loc;
+
+            // Each entry is like https://www.olx.ua/kyiv/
+            // Skip entries that are not top-level city URLs
+            $path = trim(parse_url($url, PHP_URL_PATH), '/');
+
+            if (str_contains($path, '/')) {
+                $skipped++;
+
+                continue;
             }
 
-            $this->info("City imported: {$city['display']}");
+            $slug = $path;
+            $name = ucfirst($slug);
+
+            City::updateOrCreate(
+                ['slug' => $slug],
+                ['name' => $name],
+            );
+
+            $this->line("Imported: {$slug}");
+            $imported++;
         }
+
+        $this->info("Done. {$imported} cities imported, {$skipped} entries skipped.");
+
+        return self::SUCCESS;
     }
 }

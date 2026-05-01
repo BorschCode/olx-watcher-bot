@@ -54,6 +54,13 @@ class FilterOptionSeeder extends Seeder
             // ── Локація (OLX внутрішні ID, задаються для кожного watcher) ─
             [
                 'group' => 'location',
+                'label' => 'Категорія OLX (category_id)',
+                'key' => 'category_id',
+                'value' => null,
+                'has_range' => false,
+            ],
+            [
+                'group' => 'location',
                 'label' => 'Регіон (OLX region_id)',
                 'key' => 'region_id',
                 'value' => null,
