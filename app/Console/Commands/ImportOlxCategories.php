@@ -2,11 +2,11 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Category;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
-use App\Models\Category;
 
 #[Signature('app:import-olx-categories')]
 #[Description('Command description')]
@@ -26,16 +26,13 @@ class ImportOlxCategories extends Command
 
         foreach ($sitemap->url as $entry) {
 
-            $url = (string)$entry->loc;
+            $url = (string) $entry->loc;
 
             $slug = trim(parse_url($url, PHP_URL_PATH), '/');
 
             Category::updateOrCreate(
-                ['url' => $url],
-                [
-                    'name' => ucfirst(last(explode('/', $slug))),
-                    'slug' => $slug
-                ]
+                ['slug' => $slug],
+                ['name' => ucfirst(last(explode('/', $slug)))]
             );
 
             $this->info("Imported: $slug");

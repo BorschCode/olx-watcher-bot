@@ -2,12 +2,11 @@
 
 namespace App\Console\Commands;
 
+use App\Models\City;
+use App\Models\District;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
-use App\Models\City;
-use App\Models\District;
-
 
 #[Signature('app:import-olx-locations')]
 #[Description('Command description')]
@@ -34,10 +33,10 @@ class ImportOlxLocations extends Command
                 District::updateOrCreate(
                     [
                         'city_id' => $cityModel->id,
-                        'olx_id' => $id
+                        'olx_id' => $id,
                     ],
                     [
-                        'name' => $district
+                        'name' => $district,
                     ]
                 );
             }
