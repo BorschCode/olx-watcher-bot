@@ -1,6 +1,6 @@
 services:
   app:
-    image: ${DOCKER_USERNAME}/chats-crm-system:${IMAGE_TAG:-latest}
+    image: ${DOCKER_USERNAME}/olx-watcher-bot:${IMAGE_TAG:-latest}
     ports:
       - "${APP_PORT:-80}:80"
     env_file:

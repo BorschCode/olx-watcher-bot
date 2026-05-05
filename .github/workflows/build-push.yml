@@ -41,7 +41,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKER_USERNAME }}/chats-crm-system
+          images: ${{ secrets.DOCKER_USERNAME }}/olx-watcher-bot
           flavor: |
             latest=auto
           tags: |
@@ -62,8 +62,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/chats-crm-system:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/chats-crm-system:buildcache,mode=max
+          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/olx-watcher-bot:buildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/olx-watcher-bot:buildcache,mode=max
 
       - name: Print Image Tags
         run: |

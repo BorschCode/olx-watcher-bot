@@ -73,7 +73,7 @@ jobs:
       - name: Pull image with platform specification
         run: |
           PLATFORM="${{ steps.arch.outputs.platform }}"
-          IMAGE="${DOCKER_USERNAME}/chats-crm-system:${IMAGE_TAG}"
+          IMAGE="${DOCKER_USERNAME}/olx-watcher-bot:${IMAGE_TAG}"
 
           echo "Pulling image: ${IMAGE}"
           echo "Platform: ${PLATFORM}"
@@ -153,7 +153,7 @@ jobs:
 
       - name: Deploy with Docker Compose
         run: |
-          echo "Using image: ${DOCKER_USERNAME}/chats-crm-system:${IMAGE_TAG}"
+          echo "Using image: ${DOCKER_USERNAME}/olx-watcher-bot:${IMAGE_TAG}"
           docker compose -f compose.raspberry.yml up -d --no-deps
           echo "Container started"
 
