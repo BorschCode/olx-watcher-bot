@@ -139,7 +139,6 @@ jobs:
           MAIL_FROM_NAME="${{ vars.APP_NAME }}"
 
           TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_BOT_USERNAME=${{ vars.TELEGRAM_BOT_USERNAME }}
 
           WHATSAPP_ACCESS_TOKEN=${{ secrets.WHATSAPP_ACCESS_TOKEN }}
           WHATSAPP_PHONE_NUMBER_ID=${{ vars.WHATSAPP_PHONE_NUMBER_ID }}
@@ -203,16 +202,9 @@ jobs:
           docker compose -f compose.raspberry.yml exec -T app php artisan view:cache
           docker compose -f compose.raspberry.yml exec -T app php artisan optimize
 
-      - name: Restart queue workers
+      - name: Restart daemons
         run: |
-          docker compose -f compose.raspberry.yml exec -T app php artisan queue:restart
-
-      - name: Set Telegram webhook
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          GH_ENV_NAME: raspberry
-          COMPOSE_FILE: compose.raspberry.yml
-        run: bash scripts/update-ngrok-webhook.sh
+          docker compose -f compose.raspberry.yml exec -T app supervisorctl restart nutgram queue
 
       - name: Cleanup old images
         run: docker image prune -af --filter "until=168h" || true
