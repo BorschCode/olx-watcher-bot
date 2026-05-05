@@ -138,6 +138,9 @@ jobs:
           MAIL_FROM_ADDRESS=${{ vars.MAIL_FROM_ADDRESS }}
           MAIL_FROM_NAME="${{ vars.APP_NAME }}"
 
+          WWWUSER=1000
+          WWWGROUP=1000
+
           TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }}
 
           WHATSAPP_ACCESS_TOKEN=${{ secrets.WHATSAPP_ACCESS_TOKEN }}
@@ -161,7 +164,7 @@ jobs:
         run: |
           echo "Waiting for app container to be ready..."
           for i in {1..30}; do
-            if docker compose -f compose.raspberry.yml exec -T app php -v >/dev/null 2>&1; then
+            if docker exec -T olx-watcher-bot php -v >/dev/null 2>&1; then
               echo "App is ready"
               exit 0
             fi
@@ -173,20 +176,20 @@ jobs:
 
       - name: Check environment and test connection
         run: |
-          docker compose -f compose.raspberry.yml exec -T app php artisan config:clear
+          docker exec -T olx-watcher-bot php artisan config:clear
           echo "=== Environment Check ==="
-          docker compose -f compose.raspberry.yml exec -T app printenv | grep -E "^DB_|^APP_" || echo "Failed to read environment"
-          docker compose -f compose.raspberry.yml exec -T app php artisan env || echo "artisan env not available"
+          docker exec -T olx-watcher-bot printenv | grep -E "^DB_|^APP_" || echo "Failed to read environment"
+          docker exec -T olx-watcher-bot php artisan env || echo "artisan env not available"
           echo "=== Testing Database Connection ==="
-          docker compose -f compose.raspberry.yml exec -T app php artisan tinker --execute="try { DB::connection()->getPdo(); echo 'Database connected successfully!' . PHP_EOL; } catch (Exception \$e) { echo 'Connection failed: ' . \$e->getMessage() . PHP_EOL; echo 'Trace: ' . \$e->getTraceAsString() . PHP_EOL; throw \$e; }"
+          docker exec -T olx-watcher-bot php artisan tinker --execute="try { DB::connection()->getPdo(); echo 'Database connected successfully!' . PHP_EOL; } catch (Exception \$e) { echo 'Connection failed: ' . \$e->getMessage() . PHP_EOL; echo 'Trace: ' . \$e->getTraceAsString() . PHP_EOL; throw \$e; }"
           echo "=== Checking worker logs ==="
-          docker compose -f compose.raspberry.yml exec -T app cat /var/www/html/storage/logs/worker.log | tail -50 || echo "No worker logs yet"
+          docker exec -T olx-watcher-bot cat /var/www/html/storage/logs/worker.log | tail -50 || echo "No worker logs yet"
           echo "=== Checking Laravel application logs ==="
-          docker compose -f compose.raspberry.yml exec -T app cat /var/www/html/storage/logs/laravel.log | tail -50 || echo "No Laravel logs yet"
+          docker exec -T olx-watcher-bot cat /var/www/html/storage/logs/laravel.log | tail -50 || echo "No Laravel logs yet"
 
       - name: Run database migrations
         run: |
-          docker compose -f compose.raspberry.yml exec -T app php artisan migrate --force || {
+          docker exec -T olx-watcher-bot php artisan migrate --force || {
             echo "=== Migration failed, checking logs ==="
             docker compose -f compose.raspberry.yml logs --tail=50 app
             exit 1
@@ -195,15 +198,15 @@ jobs:
 
       - name: Optimize application
         run: |
-          docker compose -f compose.raspberry.yml exec -T app php artisan cache:clear
-          docker compose -f compose.raspberry.yml exec -T app php artisan config:cache
-          docker compose -f compose.raspberry.yml exec -T app php artisan route:cache
-          docker compose -f compose.raspberry.yml exec -T app php artisan view:cache
-          docker compose -f compose.raspberry.yml exec -T app php artisan optimize
+          docker exec -T olx-watcher-bot php artisan cache:clear
+          docker exec -T olx-watcher-bot php artisan config:cache
+          docker exec -T olx-watcher-bot php artisan route:cache
+          docker exec -T olx-watcher-bot php artisan view:cache
+          docker exec -T olx-watcher-bot php artisan optimize
 
       - name: Restart daemons
         run: |
-          docker compose -f compose.raspberry.yml exec -T app supervisorctl restart nutgram queue
+          docker exec -T olx-watcher-bot supervisorctl restart nutgram queue
 
       - name: Cleanup old images
         run: docker image prune -af --filter "until=168h" || true

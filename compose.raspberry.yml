@@ -1,6 +1,7 @@
 services:
   app:
     image: ${DOCKER_USERNAME}/olx-watcher-bot:${IMAGE_TAG:-latest}
+    container_name: olx-watcher-bot
     ports:
       - "${APP_PORT:-80}:80"
     env_file:
