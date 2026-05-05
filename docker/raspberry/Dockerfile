@@ -19,6 +19,12 @@ RUN apt-get update && apt-get install -y \
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+COPY . .
+
+RUN composer install --no-dev --no-interaction --optimize-autoloader --no-scripts \
+    && mkdir -p storage/framework/sessions storage/framework/views storage/framework/cache storage/logs \
+    && chmod -R 775 storage bootstrap/cache
+
 COPY docker/raspberry/start-container /usr/local/bin/start-container
 COPY docker/raspberry/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker/raspberry/php.ini /usr/local/etc/php/conf.d/99-app.ini
