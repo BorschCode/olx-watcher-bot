@@ -35,9 +35,9 @@ RUN apt-get update && apt-get install -y \
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-COPY start-container /usr/local/bin/start-container
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-COPY php.ini /etc/php/8.5/cli/conf.d/99-app.ini
+COPY docker/raspberry/start-container /usr/local/bin/start-container
+COPY docker/raspberry/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY docker/raspberry/php.ini /etc/php/8.5/cli/conf.d/99-app.ini
 RUN chmod +x /usr/local/bin/start-container
 
 EXPOSE 80/tcp
