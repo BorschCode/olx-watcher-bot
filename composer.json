@@ -13,7 +13,8 @@
         "laravel/framework": "^13.7",
         "laravel/tinker": "^3.0",
         "laravel/wayfinder": "^0.1.14",
-        "nutgram/laravel": "^1.7"
+        "nutgram/laravel": "^1.7",
+        "ext-simplexml": "*"
     },
     "require-dev": {
         "barryvdh/laravel-ide-helper": "^3.7",

@@ -29,6 +29,7 @@ class TestWatcherNotification extends Command
         }
 
         foreach ($watchers as $watcher) {
+            /** @var Watcher $watcher */
             $label = "Watcher #{$watcher->id}".($watcher->category ? " – {$watcher->category->name}" : '');
 
             Telegram::sendMessage(
