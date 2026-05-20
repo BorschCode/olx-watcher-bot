@@ -81,6 +81,43 @@ class FilterOptionSeeder extends Seeder
                 'has_range' => false,
             ],
 
+            // ── Кількість кімнат (квартири) ──────────────────────────────
+            [
+                'group' => 'rooms',
+                'label' => 'Кімнат: 1',
+                'key' => 'filter_enum_number_of_rooms_string',
+                'value' => 'odnushki',
+                'has_range' => false,
+            ],
+            [
+                'group' => 'rooms',
+                'label' => 'Кімнат: 2',
+                'key' => 'filter_enum_number_of_rooms_string',
+                'value' => 'dvuhkomnatnye',
+                'has_range' => false,
+            ],
+            [
+                'group' => 'rooms',
+                'label' => 'Кімнат: 3',
+                'key' => 'filter_enum_number_of_rooms_string',
+                'value' => 'trehkomnatnye',
+                'has_range' => false,
+            ],
+            [
+                'group' => 'rooms',
+                'label' => 'Кімнат: 4',
+                'key' => 'filter_enum_number_of_rooms_string',
+                'value' => 'chetyrehkomnatnye',
+                'has_range' => false,
+            ],
+            [
+                'group' => 'rooms',
+                'label' => 'Кімнат: 5+',
+                'key' => 'filter_enum_number_of_rooms_string',
+                'value' => 'pyatikomnatnye',
+                'has_range' => false,
+            ],
+
             // ── Сортування ───────────────────────────────────────────────
             [
                 'group' => 'other',

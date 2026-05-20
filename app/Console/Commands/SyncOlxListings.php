@@ -6,7 +6,6 @@ use App\Enums\HttpMethod;
 use App\Models\Listing;
 use App\Models\Watcher;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Nutgram\Laravel\Facades\Telegram;
@@ -21,11 +20,71 @@ class SyncOlxListings extends Command
 
     private const int LIMIT = 40;
 
-    private const int CACHE_TTL_DAYS = 7;
+    private const string GRAPHQL_ENDPOINT = 'https://www.olx.ua/apigateway/graphql';
+
+    private const string GRAPHQL_QUERY = <<<'GRAPHQL'
+query ListingSearchQuery(
+  $searchParameters: [SearchParameter!] = []
+  $fetchPayAndShip: Boolean = false
+) {
+  clientCompatibleListings(searchParameters: $searchParameters) {
+    __typename
+    ... on ListingSuccess {
+      __typename
+      data {
+        _nodeId
+        id
+        location {
+          city { id name normalized_name }
+          district { id name }
+          region { id name normalized_name }
+        }
+        created_time
+        last_refresh_time
+        photos { link height width }
+        title
+        status
+        url
+        business
+        params {
+          key
+          name
+          type
+          value {
+            __typename
+            ... on GenericParam { key label }
+            ... on CheckboxesParam { label checkboxParamKey: key }
+            ... on PriceParam {
+              value type negotiable label currency
+              converted_value converted_currency
+            }
+          }
+        }
+        description
+        contact { name phone chat }
+        promotion { highlighted top_ad urgent }
+        protect_phone
+        user { id name seller_type }
+      }
+      metadata {
+        total_elements
+        search_id
+      }
+      links {
+        next { href }
+      }
+    }
+    ... on ListingError {
+      __typename
+      error { code title detail status }
+    }
+  }
+}
+GRAPHQL;
 
     public function handle(): int
     {
-        $query = Watcher::with('filterOptions', 'category');
+        $query = Watcher::with(['filterOptions', 'category', 'city']);
 
         if ($watcherId = $this->option('watcher')) {
             $query->where('id', $watcherId);
@@ -71,12 +130,6 @@ class SyncOlxListings extends Command
             }
 
             $latestId ??= $olxId;
-
-            Cache::put("olx_offer_{$olxId}", [
-                'offer' => $offer,
-                'category_id' => $watcher->category_id,
-            ], now()->addDays(self::CACHE_TTL_DAYS));
-
             $newOffers[] = $offer;
         }
 
@@ -121,17 +174,14 @@ class SyncOlxListings extends Command
         $response = Http::withHeaders([
             'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
             'Accept' => 'application/json, text/plain, */*',
-            'Accept-Language' => 'uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Accept-Encoding' => 'gzip, deflate, br',
+            'Accept-Language' => 'uk-UA,uk;q=0.9',
             'Referer' => 'https://www.olx.ua/',
             'Origin' => 'https://www.olx.ua',
-            'Cache-Control' => 'no-cache',
-            'Pragma' => 'no-cache',
         ])->get($url);
 
         if (! $response->successful()) {
             Log::error('OLX REST API error', ['watcher' => $watcher->id, 'status' => $response->status()]);
-            $this->error("  REST API error {$response->status()} body: {$response->body()}");
+            $this->error("  REST API error {$response->status()}");
 
             return null;
         }
@@ -142,23 +192,39 @@ class SyncOlxListings extends Command
     /** @return array<int, array<string, mixed>>|null */
     private function fetchViaGraphql(Watcher $watcher): ?array
     {
-        if ($watcher->url === null || $watcher->request_body === null) {
-            $this->warn('  No URL or request body configured, skipping.');
-
-            return null;
-        }
-
-        $response = Http::withHeaders(['Content-Type' => 'application/json'])
-            ->post($watcher->url, $watcher->request_body);
+        $response = Http::withHeaders([
+            'Content-Type' => 'application/json',
+            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept' => 'application/json',
+            'Accept-Language' => 'uk-UA,uk;q=0.9',
+            'Origin' => 'https://www.olx.ua',
+            'Referer' => 'https://www.olx.ua/',
+        ])->post(self::GRAPHQL_ENDPOINT, [
+            'query' => self::GRAPHQL_QUERY,
+            'variables' => [
+                'searchParameters' => $watcher->buildSearchParameters(offset: 0, limit: self::LIMIT),
+                'fetchPayAndShip' => false,
+            ],
+        ]);
 
         if (! $response->successful()) {
-            Log::error('OLX GraphQL error', ['watcher' => $watcher->id, 'status' => $response->status()]);
-            $this->error("  GraphQL error {$response->status()}");
+            Log::error('OLX GraphQL HTTP error', ['watcher' => $watcher->id, 'status' => $response->status()]);
+            $this->error("  GraphQL HTTP error {$response->status()}");
 
             return null;
         }
 
-        return $response->json('data.clientCompatibleObservedAds.data', []);
+        $result = $response->json('data.clientCompatibleListings');
+
+        if (($result['__typename'] ?? null) === 'ListingError') {
+            $error = $result['error'] ?? [];
+            Log::error('OLX GraphQL listing error', ['watcher' => $watcher->id, 'error' => $error]);
+            $this->error("  GraphQL error [{$error['code']}]: {$error['title']}");
+
+            return null;
+        }
+
+        return $result['data'] ?? [];
     }
 
     /** @param array<string, mixed> $offer */

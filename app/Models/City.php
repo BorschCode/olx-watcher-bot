@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * @property int $id
+ * @property int|null $olx_id
+ * @property int|null $region_id
  * @property string $slug
  * @property string $name
  * @property CarbonImmutable|null $created_at
@@ -29,6 +31,8 @@ use Illuminate\Database\Eloquent\Model;
 class City extends Model
 {
     protected $fillable = [
+        'olx_id',
+        'region_id',
         'slug',
         'name',
     ];
