@@ -1,8 +1,22 @@
-# Stage 1: build frontend assets on the native build platform (AMD64),
-# not under QEMU emulation. Node/Vite under QEMU is 20-40x slower.
-FROM --platform=$BUILDPLATFORM node:22-slim AS frontend-builder
+# Stage 1: build frontend assets on the native build platform (AMD64).
+# Wayfinder's Vite plugin calls `php artisan wayfinder:generate` at build time,
+# so PHP + Composer are needed here. Everything runs AMD64-native (no QEMU).
+FROM --platform=$BUILDPLATFORM php:8.4-cli AS frontend-builder
 
 WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl unzip gnupg \
+        libpq-dev libzip-dev libicu-dev libonig-dev libxml2-dev \
+    && docker-php-ext-install pdo_pgsql mbstring xml zip bcmath intl \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --no-interaction --no-scripts --optimize-autoloader
 
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -28,7 +42,7 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-enable redis \
     && apt-get -y autoremove \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    && rm -rf /var/lib/apt/lists/* /tmp/* /tmp/*
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
