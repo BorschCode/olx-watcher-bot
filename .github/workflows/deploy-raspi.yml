@@ -97,7 +97,6 @@ jobs:
         run: |
           docker compose -f compose.raspberry.yml down --remove-orphans || true
           docker ps -aq --filter "name=chats-crm" | xargs -r docker rm -f || true
-          docker image prune -af || true
           echo "Cleanup completed"
 
       - name: Create .env file
@@ -164,14 +163,18 @@ jobs:
         run: |
           echo "Waiting for app container to be ready..."
           for i in {1..30}; do
-            if docker exec -T olx-watcher-bot php -v >/dev/null 2>&1; then
+            STATUS=$(docker inspect --format='{{.State.Status}}' olx-watcher-bot 2>/dev/null || echo "missing")
+            if [ "$STATUS" = "running" ] && docker exec -T olx-watcher-bot php -v >/dev/null 2>&1; then
               echo "App is ready"
               exit 0
             fi
-            echo "Waiting ($i/30)..."
+            echo "Waiting ($i/30)... container status: $STATUS"
             sleep 2
           done
-          echo "App failed to start"
+          echo "=== App failed to start. Diagnostics: ==="
+          docker ps -a --filter "name=olx-watcher-bot"
+          docker inspect olx-watcher-bot --format='Status: {{.State.Status}}, ExitCode: {{.State.ExitCode}}, Error: {{.State.Error}}' 2>/dev/null || true
+          docker logs olx-watcher-bot --tail=50 2>&1 || true
           exit 1
 
       - name: Check environment and test connection
@@ -209,7 +212,9 @@ jobs:
           docker exec -T olx-watcher-bot supervisorctl restart nutgram queue
 
       - name: Cleanup old images
-        run: docker image prune -af --filter "until=168h" || true
+        run: |
+          docker image prune -af --filter "until=168h" || true
+          docker system df
 
       - name: Deployment Status
         run: |
