@@ -164,7 +164,7 @@ jobs:
           echo "Waiting for app container to be ready..."
           for i in {1..30}; do
             STATUS=$(docker inspect --format='{{.State.Status}}' olx-watcher-bot 2>/dev/null || echo "missing")
-            if [ "$STATUS" = "running" ] && docker exec -T olx-watcher-bot php -v >/dev/null 2>&1; then
+            if [ "$STATUS" = "running" ] && docker exec -T olx-watcher-bot /usr/local/bin/php -r "echo 1;" >/dev/null 2>&1; then
               echo "App is ready"
               exit 0
             fi
