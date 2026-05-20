@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * @property int $id
+ * @property int|null $olx_id
  * @property string $name
  * @property string $slug
  * @property bool $sync
@@ -33,6 +34,7 @@ use Illuminate\Database\Eloquent\Model;
 class Category extends Model
 {
     protected $fillable = [
+        'olx_id',
         'name',
         'slug',
         'sync',

@@ -99,6 +99,46 @@ class Watcher extends Model
         return $params;
     }
 
+    /**
+     * Build GraphQL searchParameters from this watcher's fields.
+     *
+     * @return array<int, array{key: string, value: string}>
+     */
+    public function buildSearchParameters(int $offset = 0, int $limit = 40): array
+    {
+        $olxCategoryId = $this->category?->olx_id ?? $this->category_id;
+
+        $params = [
+            ['key' => 'offset', 'value' => (string) $offset],
+            ['key' => 'limit', 'value' => (string) $limit],
+            ['key' => 'category_id', 'value' => (string) $olxCategoryId],
+            ['key' => 'currency', 'value' => 'UAH'],
+            ['key' => 'sort_by', 'value' => 'created_at:desc'],
+        ];
+
+        if ($this->city_id !== null && $this->city !== null) {
+            if ($this->city->olx_id !== null) {
+                $params[] = ['key' => 'city_id', 'value' => (string) $this->city->olx_id];
+            }
+
+            if ($this->city->region_id !== null) {
+                $params[] = ['key' => 'region_id', 'value' => (string) $this->city->region_id];
+            }
+        }
+
+        foreach ($this->filterParams() as $key => $value) {
+            if (is_array($value)) {
+                foreach (array_values($value) as $index => $v) {
+                    $params[] = ['key' => "{$key}[{$index}]", 'value' => (string) $v];
+                }
+            } else {
+                $params[] = ['key' => $key, 'value' => (string) $value];
+            }
+        }
+
+        return $params;
+    }
+
     public function finalUrl(): Attribute
     {
         return Attribute::make(

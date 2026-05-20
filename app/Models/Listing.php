@@ -68,7 +68,7 @@ class Listing extends Model
     public static function extractImages(array $offer): array
     {
         return array_values(array_map(
-            fn (array $photo) => $photo['link'],
+            fn (array $photo) => str_replace('{width}x{height}', '644x461', $photo['link']),
             array_filter($offer['photos'] ?? [], fn ($p) => isset($p['link'])),
         ));
     }

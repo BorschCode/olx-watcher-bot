@@ -16,7 +16,6 @@ use Filament\Actions\EditAction;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
@@ -115,28 +114,28 @@ class WatcherResource extends Resource
 
                 // ── POST (GraphQL) ────────────────────────────────────────
                 Section::make('GraphQL (POST)')
+                    ->description('Search parameters are built automatically from category, city, and filters below.')
                     ->schema([
-                        TextInput::make('url')
-                            ->label('Endpoint URL')
-                            ->url()
-                            ->maxLength(500)
-                            ->default('https://www.olx.ua/apigateway/graphql')
-                            ->required()
+                        CheckboxList::make('filterOptions')
+                            ->label('Filter Options')
+                            ->relationship('filterOptions', 'label')
                             ->columnSpanFull(),
 
-                        Textarea::make('request_body_raw')
-                            ->label('Request Body (JSON)')
-                            ->helperText('Paste the full JSON body including "query" and "variables".')
-                            ->rows(12)
-                            ->columnSpanFull()
-                            ->dehydrated(false)
-                            ->afterStateHydrated(function (Textarea $component, ?Watcher $record): void {
-                                if ($record?->request_body !== null) {
-                                    $component->state(
-                                        json_encode($record->request_body, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
-                                    );
+                        Placeholder::make('graphql_preview')
+                            ->label('Search Parameters Preview')
+                            ->content(function (?Watcher $record): string {
+                                if (! $record) {
+                                    return 'Save the watcher first to preview search parameters.';
                                 }
-                            }),
+
+                                $record->load('filterOptions', 'city');
+                                $params = $record->buildSearchParameters();
+
+                                return collect($params)
+                                    ->map(fn (array $p) => "{$p['key']} = {$p['value']}")
+                                    ->join("\n");
+                            })
+                            ->columnSpanFull(),
                     ])
                     ->visible(fn (Get $get): bool => $get('method') === HttpMethod::Post->value)
                     ->columnSpanFull(),
@@ -215,14 +214,11 @@ class WatcherResource extends Resource
     public static function normalizeFormData(array $data): array
     {
         if (($data['method'] ?? null) === HttpMethod::Post->value) {
-            $raw = $data['request_body_raw'] ?? null;
-            $data['request_body'] = $raw ? json_decode($raw, true) : null;
-            $data['url'] ??= 'https://www.olx.ua/apigateway/graphql';
+            $data['request_body'] = null;
+            $data['url'] = 'https://www.olx.ua/apigateway/graphql';
         } else {
             $data['request_body'] = null;
         }
-
-        unset($data['request_body_raw']);
 
         return $data;
     }
