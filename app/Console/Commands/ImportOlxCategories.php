@@ -16,7 +16,7 @@ class ImportOlxCategories extends Command
 
     protected $description = 'Import OLX categories from sitemap';
 
-    public function handle()
+    public function handle(): int
     {
         $xml = Http::get(
             'https://www.olx.ua/sitemap-categories.xml'

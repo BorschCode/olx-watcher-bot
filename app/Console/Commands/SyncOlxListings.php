@@ -19,9 +19,9 @@ class SyncOlxListings extends Command
 
     protected $description = 'Fetch new OLX listings for all watchers and send Telegram notifications';
 
-    private const LIMIT = 40;
+    private const int LIMIT = 40;
 
-    private const CACHE_TTL_DAYS = 7;
+    private const int CACHE_TTL_DAYS = 7;
 
     public function handle(): int
     {

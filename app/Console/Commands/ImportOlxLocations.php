@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\City;
 use Illuminate\Console\Command;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 class ImportOlxLocations extends Command
@@ -12,6 +13,9 @@ class ImportOlxLocations extends Command
 
     protected $description = 'Import OLX cities from the locations sitemap';
 
+    /**
+     * @throws ConnectionException
+     */
     public function handle(): int
     {
         $xml = Http::get('https://www.olx.ua/sitemap-locations.xml')->body();
