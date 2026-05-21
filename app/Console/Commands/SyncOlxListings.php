@@ -7,6 +7,7 @@ use App\Models\Listing;
 use App\Models\Watcher;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Nutgram\Laravel\Facades\Telegram;
@@ -452,6 +453,15 @@ GRAPHQL;
     {
         $price = Listing::extractPrice($offer);
         $images = Listing::extractImages($offer);
+
+        Cache::put("olx_offer_{$offer['id']}", [
+            'offer' => $offer,
+            'watcher_id' => $watcher->id,
+            'category_id' => $watcher->category_id,
+            'telegram_chat_id' => $watcher->telegram_chat_id,
+            'price' => $price,
+            'images' => $images,
+        ], now()->addDays(7));
 
         $validUntilRaw = $offer['price_valid_until'] ?? null;
         $validUntil = $this->formatOfferDate($validUntilRaw);

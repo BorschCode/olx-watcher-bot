@@ -155,6 +155,7 @@ class WatcherResource extends Resource
                     ->formatStateUsing(fn (HttpMethod $state): string => $state->label())
                     ->color(fn (HttpMethod $state): string => match ($state) {
                         HttpMethod::Get => 'success',
+                        HttpMethod::GetHtml => 'info',
                         HttpMethod::Post => 'warning',
                     }),
 
