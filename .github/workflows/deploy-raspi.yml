@@ -64,7 +64,8 @@ jobs:
       - name: Free up memory before pull
         run: |
           echo "Freeing up memory..."
-          docker system prune -af --volumes || true
+          docker container prune -f --filter "label=maintainer=olx-watcher" || true
+          docker image prune -f || true
           sync
           echo "Memory status:"
           free -h
@@ -96,7 +97,7 @@ jobs:
       - name: Stop and remove old container
         run: |
           docker compose -f compose.raspberry.yml down --remove-orphans || true
-          docker ps -aq --filter "name=chats-crm" | xargs -r docker rm -f || true
+          docker ps -aq --filter "label=maintainer=olx-watcher" | xargs -r docker rm -f || true
           echo "Cleanup completed"
 
       - name: Create .env file
