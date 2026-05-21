@@ -100,9 +100,16 @@ GRAPHQL;
             return self::SUCCESS;
         }
 
+        Log::info('olx:sync started', [
+            'watcher_count' => $watchers->count(),
+            'watcher_ids' => $watchers->pluck('id')->all(),
+        ]);
+
         foreach ($watchers as $watcher) {
             $this->syncWatcher($watcher);
         }
+
+        Log::info('olx:sync finished', ['watcher_count' => $watchers->count()]);
 
         return self::SUCCESS;
     }
@@ -112,6 +119,13 @@ GRAPHQL;
         $label = "Watcher #{$watcher->id}".($watcher->category ? " – {$watcher->category->name}" : '');
         $this->info("Syncing: {$label}");
 
+        Log::info('Watcher sync started', [
+            'watcher_id' => $watcher->id,
+            'method' => $watcher->method->value,
+            'last_seen_id' => $watcher->last_seen_id,
+            'url' => $watcher->url,
+        ]);
+
         $offers = match ($watcher->method) {
             HttpMethod::Get => $this->fetchViaRest($watcher),
             HttpMethod::GetHtml => $this->fetchViaHtmlLd($watcher),
@@ -119,8 +133,16 @@ GRAPHQL;
         };
 
         if ($offers === null) {
+            Log::warning('Watcher fetch returned no data', ['watcher_id' => $watcher->id]);
+
             return;
         }
+
+        Log::info('Watcher fetch completed', [
+            'watcher_id' => $watcher->id,
+            'fetched' => count($offers),
+            'ids' => array_column($offers, 'id'),
+        ]);
 
         if ($watcher->method === HttpMethod::GetHtml) {
             // OLX already filters server-side via min_id; every returned offer is new.
@@ -131,6 +153,10 @@ GRAPHQL;
                 $maxId = max(array_map(fn ($o) => (int) $o['id'], $newOffers));
                 if ($maxId > 0) {
                     $watcher->update(['url' => $this->updateUrlMinId($watcher->url, $maxId)]);
+                    Log::info('Watcher min_id advanced', [
+                        'watcher_id' => $watcher->id,
+                        'new_min_id' => $maxId,
+                    ]);
                 }
             }
         } else {
@@ -150,6 +176,18 @@ GRAPHQL;
 
             if ($latestId !== null) {
                 $watcher->update(['last_seen_id' => $latestId]);
+                Log::info('Watcher last_seen_id advanced', [
+                    'watcher_id' => $watcher->id,
+                    'previous_last_seen_id' => $watcher->last_seen_id,
+                    'new_last_seen_id' => $latestId,
+                    'new_offer_ids' => array_column($newOffers, 'id'),
+                ]);
+            } else {
+                Log::info('Watcher no new offers', [
+                    'watcher_id' => $watcher->id,
+                    'last_seen_id' => $watcher->last_seen_id,
+                    'fetched' => count($offers),
+                ]);
             }
         }
 
@@ -159,10 +197,11 @@ GRAPHQL;
             try {
                 $this->sendNotification($watcher, $offer);
                 $notified++;
+                Log::info('Offer notified', ['watcher_id' => $watcher->id, 'offer_id' => $offer['id']]);
             } catch (\Throwable $e) {
                 Log::error('Telegram notification failed', [
-                    'watcher' => $watcher->id,
-                    'offer' => $offer['id'],
+                    'watcher_id' => $watcher->id,
+                    'offer_id' => $offer['id'],
                     'error' => $e->getMessage(),
                 ]);
                 $this->warn("  Notification failed for offer #{$offer['id']}: {$e->getMessage()}");
@@ -173,6 +212,12 @@ GRAPHQL;
 
         $total = count($newOffers);
         $this->line("  Done. {$notified}/{$total} notified.");
+
+        Log::info('Watcher sync finished', [
+            'watcher_id' => $watcher->id,
+            'notified' => $notified,
+            'total_new' => $total,
+        ]);
     }
 
     /** @return array<int, array<string, mixed>>|null */
