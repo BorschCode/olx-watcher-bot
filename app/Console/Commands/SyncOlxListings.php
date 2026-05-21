@@ -146,19 +146,43 @@ GRAPHQL;
         ]);
 
         if ($watcher->method === HttpMethod::GetHtml) {
-            // OLX already filters server-side via min_id; every returned offer is new.
-            // After processing, advance min_id in the stored URL to the highest seen listing ID.
-            $newOffers = $offers;
+            // OLX mixes promoted/bumped old ads with new ones, so min_id server-side filtering
+            // is unreliable. Filter client-side by last_seen_id, using continue (not break)
+            // because results are not sorted strictly by ID.
+            $newOffers = [];
+            $latestId = null;
 
-            if ($newOffers !== [] && $watcher->url !== null) {
-                $maxId = max(array_map(fn ($o) => (int) $o['id'], $newOffers));
-                if ($maxId > 0) {
-                    $watcher->update(['url' => $this->updateUrlMinId($watcher->url, $maxId)]);
-                    Log::info('Watcher min_id advanced', [
-                        'watcher_id' => $watcher->id,
-                        'new_min_id' => $maxId,
-                    ]);
+            foreach ($offers as $offer) {
+                $olxId = (int) $offer['id'];
+
+                if ($watcher->last_seen_id && $olxId <= $watcher->last_seen_id) {
+                    continue;
                 }
+
+                $latestId = max($latestId ?? 0, $olxId);
+                $newOffers[] = $offer;
+            }
+
+            if ($latestId !== null) {
+                $updates = ['last_seen_id' => $latestId];
+
+                if ($watcher->url !== null) {
+                    $updates['url'] = $this->updateUrlMinId($watcher->url, $latestId);
+                }
+
+                $watcher->update($updates);
+
+                Log::info('Watcher last_seen_id advanced', [
+                    'watcher_id' => $watcher->id,
+                    'new_last_seen_id' => $latestId,
+                    'new_offer_ids' => array_column($newOffers, 'id'),
+                ]);
+            } else {
+                Log::info('Watcher no new offers', [
+                    'watcher_id' => $watcher->id,
+                    'last_seen_id' => $watcher->last_seen_id,
+                    'fetched' => count($offers),
+                ]);
             }
         } else {
             $newOffers = [];

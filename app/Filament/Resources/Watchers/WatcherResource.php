@@ -24,6 +24,7 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
@@ -146,6 +147,13 @@ class WatcherResource extends Resource
     {
         return $table
             ->columns([
+                TextColumn::make('id')
+                    ->label('ID')
+                    ->sortable(),
+
+                ToggleColumn::make('is_active')
+                    ->label('Активний'),
+
                 TextColumn::make('telegram_chat_id')
                     ->label('Chat ID')
                     ->searchable(),
