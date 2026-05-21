@@ -5,10 +5,12 @@ namespace App\Console\Commands;
 use App\Enums\HttpMethod;
 use App\Models\Listing;
 use App\Models\Watcher;
+use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Nutgram\Laravel\Facades\Telegram;
+use SergiX44\Nutgram\Telegram\Types\Input\InputMediaPhoto;
 use SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardButton;
 use SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardMarkup;
 
@@ -165,6 +167,8 @@ GRAPHQL;
                 ]);
                 $this->warn("  Notification failed for offer #{$offer['id']}: {$e->getMessage()}");
             }
+
+            sleep(1);
         }
 
         $total = count($newOffers);
@@ -264,9 +268,18 @@ GRAPHQL;
             return null;
         }
 
+        $html = $response->body();
+
+        // Primary: window.__PRERENDERED_STATE__ – real integer IDs + full data
+        $ads = $this->parsePrerenderedAds($html);
+        if ($ads !== null) {
+            return $ads;
+        }
+
+        // Fallback: LD+JSON Product schema
         preg_match_all(
             '/<script[^>]+type="application\/ld\+json"[^>]*>(.*?)<\/script>/s',
-            $response->body(),
+            $html,
             $matches,
         );
 
@@ -283,25 +296,79 @@ GRAPHQL;
                 continue;
             }
 
-            return array_values(array_map(function (array $offer): array {
-                return [
-                    'id' => $this->decodeOlxIdFromUrl($offer['url'] ?? ''),
-                    'title' => $offer['name'] ?? '',
-                    'url' => $offer['url'] ?? '',
-                    'params' => [
-                        ['key' => 'price', 'value' => ['value' => $offer['price'] ?? 0]],
-                    ],
-                    'photos' => array_map(
-                        fn (string $img) => ['link' => $img],
-                        $offer['image'] ?? [],
-                    ),
-                ];
-            }, $ldOffers));
+            return array_values(array_map(fn (array $offer): array => [
+                'id' => $this->decodeOlxIdFromUrl($offer['url'] ?? ''),
+                'title' => $offer['name'] ?? '',
+                'url' => $offer['url'] ?? '',
+                'price_valid_until' => $offer['priceValidUntil'] ?? null,
+                'params' => [
+                    ['key' => 'price', 'value' => ['value' => $offer['price'] ?? 0]],
+                ],
+                'photos' => array_map(
+                    fn (string $img) => ['link' => $img],
+                    $offer['image'] ?? [],
+                ),
+            ], $ldOffers));
         }
 
-        $this->warn('  No Product LD+JSON block found in HTML.');
+        $this->warn('  No usable data found in HTML response.');
 
         return null;
+    }
+
+    /** @return array<int, array<string, mixed>>|null */
+    private function parsePrerenderedAds(string $html): ?array
+    {
+        $marker = 'window.__PRERENDERED_STATE__ = ';
+        $markerPos = strpos($html, $marker);
+
+        if ($markerPos === false || ($html[$markerPos + strlen($marker)] ?? '') !== '"') {
+            return null;
+        }
+
+        // Scan past the opening quote, respecting backslash escapes, to find the closing quote
+        $i = $markerPos + strlen($marker) + 1;
+        $len = strlen($html);
+        while ($i < $len) {
+            $c = $html[$i];
+            if ($c === '\\') {
+                $i += 2;
+            } elseif ($c === '"') {
+                break;
+            } else {
+                $i++;
+            }
+        }
+
+        $jsonStringLiteral = substr($html, $markerPos + strlen($marker), $i - $markerPos - strlen($marker) + 1);
+        $innerJson = json_decode($jsonStringLiteral);
+
+        if (! is_string($innerJson)) {
+            return null;
+        }
+
+        $data = json_decode($innerJson, true);
+        $ads = $data['listing']['listing']['ads'] ?? null;
+
+        if (! is_array($ads) || $ads === []) {
+            return null;
+        }
+
+        return array_values(array_map(fn (array $ad): array => [
+            'id' => (int) ($ad['id'] ?? 0),
+            'title' => $ad['title'] ?? '',
+            'url' => $ad['url'] ?? '',
+            'created_time' => $ad['createdTime'] ?? null,
+            'last_refresh_time' => $ad['lastRefreshTime'] ?? null,
+            'price_valid_until' => $ad['validToTime'] ?? null,
+            'params' => isset($ad['price']['regularPrice']['value'])
+                ? [['key' => 'price', 'value' => ['value' => $ad['price']['regularPrice']['value']]]]
+                : [],
+            'photos' => array_map(
+                fn (string $url) => ['link' => $url],
+                $ad['photos'] ?? [],
+            ),
+        ], $ads));
     }
 
     private function decodeOlxIdFromUrl(string $url): int
@@ -341,9 +408,25 @@ GRAPHQL;
         $price = Listing::extractPrice($offer);
         $images = Listing::extractImages($offer);
 
+        $validUntilRaw = $offer['price_valid_until'] ?? null;
+        $validUntil = $this->formatOfferDate($validUntilRaw);
+
+        $createdAtRaw = $offer['created_time'] ?? null;
+        if ($createdAtRaw === null && $validUntilRaw !== null) {
+            try {
+                $createdAtRaw = Carbon::parse((string) $validUntilRaw)->subDays(30);
+            } catch (\Throwable) {
+            }
+        }
+        $createdAt = $this->formatOfferDate($createdAtRaw);
+        $refreshedAt = $this->formatOfferDate($offer['last_refresh_time'] ?? null);
+
         $caption = implode("\n", array_filter([
             "🆕 <b>{$offer['title']}</b>",
             $price ? '💰 '.number_format($price, 0, '.', ' ').' грн' : null,
+            $createdAt ? "📅 Опубліковано: {$createdAt}" : null,
+            $refreshedAt && $refreshedAt !== $createdAt ? "🔄 Оновлено: {$refreshedAt}" : null,
+            $validUntil ? "⏰ Активно до: {$validUntil}" : null,
             "🔗 {$offer['url']}",
         ]));
 
@@ -351,21 +434,85 @@ GRAPHQL;
             InlineKeyboardButton::make('💾 Зберегти на потім', callback_data: "save_{$offer['id']}"),
         );
 
-        if ($images !== []) {
-            Telegram::sendPhoto(
+        if (count($images) > 1) {
+            $media = array_map(
+                fn (string $url) => InputMediaPhoto::make(media: $url),
+                array_slice($images, 0, 10),
+            );
+
+            $this->sendWithRetry(fn () => Telegram::sendMediaGroup(
+                media: $media,
+                chat_id: $watcher->telegram_chat_id,
+            ));
+
+            $this->sendWithRetry(fn () => Telegram::sendMessage(
+                text: $caption,
+                parse_mode: 'HTML',
+                reply_markup: $replyMarkup,
+                chat_id: $watcher->telegram_chat_id,
+            ));
+        } elseif ($images !== []) {
+            $this->sendWithRetry(fn () => Telegram::sendPhoto(
                 photo: $images[0],
                 caption: $caption,
                 parse_mode: 'HTML',
                 reply_markup: $replyMarkup,
                 chat_id: $watcher->telegram_chat_id,
-            );
+            ));
         } else {
-            Telegram::sendMessage(
+            $this->sendWithRetry(fn () => Telegram::sendMessage(
                 text: $caption,
                 parse_mode: 'HTML',
                 reply_markup: $replyMarkup,
                 chat_id: $watcher->telegram_chat_id,
-            );
+            ));
+        }
+    }
+
+    private function sendWithRetry(callable $send, int $maxRetries = 3): void
+    {
+        for ($attempt = 0; $attempt <= $maxRetries; $attempt++) {
+            try {
+                $send();
+
+                return;
+            } catch (\Throwable $e) {
+                if ($attempt === $maxRetries) {
+                    throw $e;
+                }
+
+                if (preg_match('/retry after (\d+)/i', $e->getMessage(), $m)) {
+                    $wait = (int) $m[1] + 1;
+                    $this->line("    Rate limited, retrying in {$wait}s…");
+                    sleep($wait);
+                } elseif (str_contains($e->getMessage(), 'timed out') || str_contains($e->getMessage(), 'cURL error 28')) {
+                    $this->line('    Request timed out, retrying…');
+                    sleep(3);
+                } else {
+                    throw $e;
+                }
+            }
+        }
+    }
+
+    private function formatOfferDate(mixed $date): ?string
+    {
+        if ($date === null) {
+            return null;
+        }
+
+        try {
+            if ($date instanceof Carbon) {
+                return $date->format('d.m.Y H:i');
+            }
+
+            $carbon = is_numeric($date)
+                ? Carbon::createFromTimestamp((int) $date)
+                : Carbon::parse((string) $date);
+
+            return $carbon->format('d.m.Y H:i');
+        } catch (\Throwable) {
+            return null;
         }
     }
 }
