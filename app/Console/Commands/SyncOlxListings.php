@@ -448,7 +448,9 @@ GRAPHQL;
         return $url.$separator."min_id={$minId}";
     }
 
-    /** @param array<string, mixed> $offer */
+    /** @param array<string, mixed> $offer
+     * @throws \Throwable
+     */
     private function sendNotification(Watcher $watcher, array $offer): void
     {
         $price = Listing::extractPrice($offer);
