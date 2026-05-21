@@ -105,7 +105,11 @@ class SavedAdResource extends Resource
 
                 TextColumn::make('images')
                     ->label('Фото')
-                    ->formatStateUsing(fn (?array $state): string => $state ? count($state).' шт.' : '—')
+                    ->formatStateUsing(function (mixed $state): string {
+                        $items = is_string($state) ? json_decode($state, true) : $state;
+
+                        return is_array($items) && $items !== [] ? count($items).' шт.' : '—';
+                    })
                     ->badge()
                     ->color('gray'),
 
