@@ -27,6 +27,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class WatcherResource extends Resource
 {
@@ -71,8 +72,7 @@ class WatcherResource extends Resource
                     ->schema([
                         TextInput::make('url')
                             ->label('Base URL')
-                            ->url()
-                            ->maxLength(500)
+                            ->maxLength(2048)
                             ->columnSpanFull()
                             ->suffixAction(
                                 Action::make('generateUrl')
@@ -102,7 +102,11 @@ class WatcherResource extends Resource
 
                         CheckboxList::make('filterOptions')
                             ->label('Filter Options')
-                            ->relationship('filterOptions', 'label')
+                            ->relationship(
+                                'filterOptions',
+                                'label',
+                                fn (Builder $query) => $query->forMethod(HttpMethod::Get->value),
+                            )
                             ->columnSpanFull(),
 
                         Placeholder::make('final_url')
@@ -113,13 +117,30 @@ class WatcherResource extends Resource
                     ->visible(fn (Get $get): bool => $get('method') === HttpMethod::Get->value)
                     ->columnSpanFull(),
 
+                // ── GET HTML ──────────────────────────────────────────────
+                Section::make('GET – HTML')
+                    ->description('Paste the full OLX search page URL. Filters and sorting must be included in the URL directly.')
+                    ->schema([
+                        TextInput::make('url')
+                            ->label('URL пошукової сторінки')
+                            ->maxLength(2048)
+                            ->columnSpanFull()
+                            ->placeholder('https://www.olx.ua/uk/nedvizhimost/...'),
+                    ])
+                    ->visible(fn (Get $get): bool => $get('method') === HttpMethod::GetHtml->value)
+                    ->columnSpanFull(),
+
                 // ── POST (GraphQL) ────────────────────────────────────────
                 Section::make('GraphQL (POST)')
                     ->description('Search parameters are built automatically from category, city, and filters below.')
                     ->schema([
                         CheckboxList::make('filterOptions')
                             ->label('Filter Options')
-                            ->relationship('filterOptions', 'label')
+                            ->relationship(
+                                'filterOptions',
+                                'label',
+                                fn (Builder $query) => $query->forMethod(HttpMethod::Post->value),
+                            )
                             ->columnSpanFull(),
 
                         Placeholder::make('graphql_preview')
