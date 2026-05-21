@@ -2,9 +2,11 @@
 
 namespace App\Telegram\Handlers;
 
+use App\Models\Listing;
 use App\Models\SavedAd;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use SergiX44\Nutgram\Nutgram;
 use SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardMarkup;
@@ -13,10 +15,11 @@ class SaveListingHandler
 {
     public function __invoke(Nutgram $bot, string $olxId): void
     {
-        $cached = Cache::get("olx_offer_{$olxId}");
+        $cached = Cache::get("olx_offer_{$olxId}")
+            ?? $this->fetchFromOlxApi((int) $olxId, (string) $bot->chatId());
 
         if ($cached === null) {
-            $bot->answerCallbackQuery(text: '⌛ Термін зберігання минув.');
+            $bot->answerCallbackQuery(text: '⌛ Дані оголошення недоступні.');
 
             return;
         }
@@ -53,6 +56,43 @@ class SaveListingHandler
         }
 
         $bot->editMessageReplyMarkup(reply_markup: InlineKeyboardMarkup::make());
+    }
+
+    /** @return array<string, mixed>|null */
+    private function fetchFromOlxApi(int $olxId, string $chatId): ?array
+    {
+        try {
+            $response = Http::withHeaders([
+                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Accept' => 'application/json',
+                'Accept-Language' => 'uk-UA,uk;q=0.9',
+                'Referer' => 'https://www.olx.ua/',
+            ])->get("https://www.olx.ua/api/v1/offers/{$olxId}");
+
+            if (! $response->successful()) {
+                return null;
+            }
+
+            $offer = $response->json('data');
+
+            if (! is_array($offer) || empty($offer)) {
+                return null;
+            }
+
+            return [
+                'offer' => $offer,
+                'telegram_chat_id' => $chatId,
+                'price' => Listing::extractPrice($offer),
+                'images' => Listing::extractImages($offer),
+            ];
+        } catch (\Throwable $e) {
+            Log::warning('OLX API fallback failed in SaveListingHandler', [
+                'olx_id' => $olxId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     private function parseDate(mixed $date): ?Carbon
