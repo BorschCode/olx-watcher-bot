@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\HttpMethod;
 use Database\Factories\WatcherFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -20,6 +21,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  * @property string|null $url
  * @property array<string, mixed>|null $request_body
  * @property int|null $last_seen_id
+ * @property bool $is_active
  * @property-read Category|null $category
  * @property-read City|null $city
  * @property-read Collection<int, FilterOption> $filterOptions
@@ -30,6 +32,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  * @method static \Illuminate\Database\Eloquent\Builder<static>|Watcher newModelQuery()
  * @method static \Illuminate\Database\Eloquent\Builder<static>|Watcher newQuery()
  * @method static \Illuminate\Database\Eloquent\Builder<static>|Watcher query()
+ * @method static Builder<static> active()
  *
  * @mixin \Eloquent
  */
@@ -46,6 +49,7 @@ class Watcher extends Model
         'url',
         'request_body',
         'last_seen_id',
+        'is_active',
     ];
 
     protected function casts(): array
@@ -54,7 +58,14 @@ class Watcher extends Model
             'method' => HttpMethod::class,
             'request_body' => 'array',
             'last_seen_id' => 'integer',
+            'is_active' => 'boolean',
         ];
+    }
+
+    /** @param Builder<static> $query */
+    public function scopeActive(Builder $query): void
+    {
+        $query->where('is_active', true);
     }
 
     public function category(): BelongsTo

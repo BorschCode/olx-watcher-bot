@@ -8,7 +8,9 @@ return [
     'safe_mode' => env('APP_ENV', 'local') === 'production',
 
     // Extra or specific configurations
-    'config' => [],
+    'config' => [
+        'timeout' => 30,
+    ],
 
     // Set if the service provider should automatically load
     // handlers from /routes/telegram.php
