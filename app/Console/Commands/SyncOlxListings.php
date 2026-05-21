@@ -84,7 +84,7 @@ GRAPHQL;
 
     public function handle(): int
     {
-        $query = Watcher::with(['filterOptions', 'category', 'city']);
+        $query = Watcher::active()->with(['filterOptions', 'category', 'city']);
 
         if ($watcherId = $this->option('watcher')) {
             $query->where('id', $watcherId);
@@ -112,6 +112,7 @@ GRAPHQL;
 
         $offers = match ($watcher->method) {
             HttpMethod::Get => $this->fetchViaRest($watcher),
+            HttpMethod::GetHtml => $this->fetchViaHtmlLd($watcher),
             HttpMethod::Post => $this->fetchViaGraphql($watcher),
         };
 
@@ -119,22 +120,35 @@ GRAPHQL;
             return;
         }
 
-        $newOffers = [];
-        $latestId = null;
+        if ($watcher->method === HttpMethod::GetHtml) {
+            // OLX already filters server-side via min_id; every returned offer is new.
+            // After processing, advance min_id in the stored URL to the highest seen listing ID.
+            $newOffers = $offers;
 
-        foreach ($offers as $offer) {
-            $olxId = (int) $offer['id'];
+            if ($newOffers !== [] && $watcher->url !== null) {
+                $maxId = max(array_map(fn ($o) => (int) $o['id'], $newOffers));
+                if ($maxId > 0) {
+                    $watcher->update(['url' => $this->updateUrlMinId($watcher->url, $maxId)]);
+                }
+            }
+        } else {
+            $newOffers = [];
+            $latestId = null;
 
-            if ($watcher->last_seen_id && $olxId <= $watcher->last_seen_id) {
-                break;
+            foreach ($offers as $offer) {
+                $olxId = (int) $offer['id'];
+
+                if ($watcher->last_seen_id && $olxId <= $watcher->last_seen_id) {
+                    break;
+                }
+
+                $latestId ??= $olxId;
+                $newOffers[] = $offer;
             }
 
-            $latestId ??= $olxId;
-            $newOffers[] = $offer;
-        }
-
-        if ($latestId !== null) {
-            $watcher->update(['last_seen_id' => $latestId]);
+            if ($latestId !== null) {
+                $watcher->update(['last_seen_id' => $latestId]);
+            }
         }
 
         $notified = 0;
@@ -225,6 +239,100 @@ GRAPHQL;
         }
 
         return $result['data'] ?? [];
+    }
+
+    /** @return array<int, array<string, mixed>>|null */
+    private function fetchViaHtmlLd(Watcher $watcher): ?array
+    {
+        if ($watcher->url === null) {
+            $this->warn('  No URL configured, skipping.');
+
+            return null;
+        }
+
+        $response = Http::withHeaders([
+            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language' => 'uk-UA,uk;q=0.9',
+            'Referer' => 'https://www.olx.ua/',
+        ])->get($watcher->url);
+
+        if (! $response->successful()) {
+            Log::error('OLX HTML fetch error', ['watcher' => $watcher->id, 'status' => $response->status()]);
+            $this->error("  HTML fetch error {$response->status()}");
+
+            return null;
+        }
+
+        preg_match_all(
+            '/<script[^>]+type="application\/ld\+json"[^>]*>(.*?)<\/script>/s',
+            $response->body(),
+            $matches,
+        );
+
+        foreach ($matches[1] as $jsonStr) {
+            $data = json_decode($jsonStr, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE || ($data['@type'] ?? null) !== 'Product') {
+                continue;
+            }
+
+            $ldOffers = $data['offers']['offers'] ?? [];
+
+            if ($ldOffers === []) {
+                continue;
+            }
+
+            return array_values(array_map(function (array $offer): array {
+                return [
+                    'id' => $this->decodeOlxIdFromUrl($offer['url'] ?? ''),
+                    'title' => $offer['name'] ?? '',
+                    'url' => $offer['url'] ?? '',
+                    'params' => [
+                        ['key' => 'price', 'value' => ['value' => $offer['price'] ?? 0]],
+                    ],
+                    'photos' => array_map(
+                        fn (string $img) => ['link' => $img],
+                        $offer['image'] ?? [],
+                    ),
+                ];
+            }, $ldOffers));
+        }
+
+        $this->warn('  No Product LD+JSON block found in HTML.');
+
+        return null;
+    }
+
+    private function decodeOlxIdFromUrl(string $url): int
+    {
+        if (! preg_match('/ID([A-Za-z0-9]+)\.html$/', $url, $m)) {
+            return 0;
+        }
+
+        $chars = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        $result = 0;
+
+        foreach (str_split($m[1]) as $char) {
+            $pos = strpos($chars, $char);
+            if ($pos === false) {
+                return 0;
+            }
+            $result = $result * 62 + $pos;
+        }
+
+        return $result;
+    }
+
+    private function updateUrlMinId(string $url, int $minId): string
+    {
+        if (str_contains($url, 'min_id=')) {
+            return (string) preg_replace('/min_id=\d+/', "min_id={$minId}", $url);
+        }
+
+        $separator = str_contains($url, '?') ? '&' : '?';
+
+        return $url.$separator."min_id={$minId}";
     }
 
     /** @param array<string, mixed> $offer */
