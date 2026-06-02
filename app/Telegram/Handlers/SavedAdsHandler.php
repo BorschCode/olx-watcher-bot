@@ -10,12 +10,16 @@ class SavedAdsHandler
     public function __invoke(Nutgram $bot): void
     {
         $chatId = (string) $bot->chatId();
+        $adminChatId = (string) config('nutgram.admin_chat_id', '');
+        $isAdmin = $adminChatId !== '' && $chatId === $adminChatId;
 
-        $ads = SavedAd::query()
-            ->where('telegram_chat_id', $chatId)
-            ->orderByDesc('created_at')
-            ->limit(10)
-            ->get();
+        $query = SavedAd::query()->orderByDesc('created_at')->limit(10);
+
+        if (! $isAdmin) {
+            $query->where('telegram_chat_id', $chatId);
+        }
+
+        $ads = $query->get();
 
         if ($ads->isEmpty()) {
             $bot->sendMessage(
@@ -26,7 +30,12 @@ class SavedAdsHandler
             return;
         }
 
-        $lines = ['📌 <b>Останні збережені оголошення:</b>', ''];
+        $lines = [
+            $isAdmin
+                ? '👑 <b>Усі збережені оголошення (адмін):</b>'
+                : '📌 <b>Останні збережені оголошення:</b>',
+            '',
+        ];
 
         foreach ($ads as $index => $ad) {
             $num = $index + 1;

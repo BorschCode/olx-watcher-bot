@@ -24,4 +24,7 @@ return [
 
     // Set log channel
     'log_channel' => env('TELEGRAM_LOG_CHANNEL', 'null'),
+
+    // Chat ID with unrestricted access across all users' data
+    'admin_chat_id' => env('TELEGRAM_ADMIN_CHAT_ID', ''),
 ];
