@@ -509,6 +509,7 @@ GRAPHQL;
             $refreshedAt && $refreshedAt !== $createdAt ? "🔄 Оновлено: {$refreshedAt}" : null,
             $validUntil ? "⏰ Активно до: {$validUntil}" : null,
             "🔗 {$offer['url']}",
+            "👁 Watcher #{$watcher->id}",
         ]));
 
         $replyMarkup = InlineKeyboardMarkup::make()->addRow(
