@@ -22,10 +22,11 @@ class SavedAdsHandler
         $ads = $query->get();
 
         if ($ads->isEmpty()) {
-            $bot->sendMessage(
-                text: '📭 У вас ще немає збережених оголошень.',
-                parse_mode: 'HTML',
-            );
+            $text = $isAdmin
+                ? '📭 Збережених оголошень немає (жоден користувач ще не зберіг).'
+                : '📭 У вас ще немає збережених оголошень.';
+
+            $bot->sendMessage(text: $text, parse_mode: 'HTML');
 
             return;
         }
