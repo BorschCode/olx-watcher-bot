@@ -16,14 +16,10 @@ class MyIdHandler
             '🆔 <b>Ідентифікатори чату</b>',
             '',
             "💬 Chat ID: <code>{$chatId}</code>  ({$chatType})",
+            "👤 User ID: <code>{$userId}</code>",
+            '',
+            '<i>Chat ID використовується для фільтрації збережених оголошень (/saved).</i>',
         ];
-
-        if ($userId && $userId !== $chatId) {
-            $lines[] = "👤 User ID: <code>{$userId}</code>";
-        }
-
-        $lines[] = '';
-        $lines[] = '<i>Chat ID використовується для фільтрації збережених оголошень (/saved).</i>';
 
         $bot->sendMessage(
             text: implode("\n", $lines),
