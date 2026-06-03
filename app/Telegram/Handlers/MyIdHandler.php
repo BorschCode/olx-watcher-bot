@@ -2,6 +2,7 @@
 
 namespace App\Telegram\Handlers;
 
+use Illuminate\Support\Facades\Log;
 use SergiX44\Nutgram\Nutgram;
 
 class MyIdHandler
@@ -11,6 +12,13 @@ class MyIdHandler
         $chatId = $bot->chatId();
         $userId = $bot->userId();
         $chatType = $bot->chat()?->type ?? 'unknown';
+
+        Log::info('MyIdHandler invoked', [
+            'chat_id' => $chatId,
+            'user_id' => $userId,
+            'chat_type' => $chatType,
+            'update_type' => $bot->currentUpdate()?->getType(),
+        ]);
 
         $lines = [
             '🆔 <b>Ідентифікатори чату</b>',
@@ -25,5 +33,7 @@ class MyIdHandler
             text: implode("\n", $lines),
             parse_mode: 'HTML',
         );
+
+        Log::info('MyIdHandler message sent', ['chat_id' => $chatId]);
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Telegram\Handlers;
 
 use App\Models\SavedAd;
+use Illuminate\Support\Facades\Log;
 use SergiX44\Nutgram\Nutgram;
 
 class SavedAdsHandler
@@ -13,6 +14,13 @@ class SavedAdsHandler
         $adminChatId = (string) config('nutgram.admin_chat_id', '');
         $isAdmin = $adminChatId !== '' && $chatId === $adminChatId;
 
+        Log::info('SavedAdsHandler invoked', [
+            'chat_id' => $chatId,
+            'admin_chat_id' => $adminChatId,
+            'is_admin' => $isAdmin,
+            'total_saved_ads' => SavedAd::count(),
+        ]);
+
         $query = SavedAd::query()->orderByDesc('created_at')->limit(10);
 
         if (! $isAdmin) {
@@ -20,6 +28,11 @@ class SavedAdsHandler
         }
 
         $ads = $query->get();
+
+        Log::info('SavedAdsHandler query result', [
+            'count' => $ads->count(),
+            'chat_ids_in_db' => SavedAd::distinct()->pluck('telegram_chat_id')->all(),
+        ]);
 
         if ($ads->isEmpty()) {
             $text = $isAdmin
