@@ -144,6 +144,8 @@ jobs:
           TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_ADMIN_CHAT_ID=${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
 
+          AUTORIA_API_KEY=${{ secrets.AUTORIA_API_KEY }}
+
           EOF
 
       - name: Deploy with Docker Compose
