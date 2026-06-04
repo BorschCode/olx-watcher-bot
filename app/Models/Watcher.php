@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\HttpMethod;
+use App\Enums\WatcherSource;
 use Database\Factories\WatcherFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -15,8 +16,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 /**
  * @property int $id
  * @property string $telegram_chat_id
- * @property HttpMethod $method
- * @property int $category_id
+ * @property WatcherSource $source
+ * @property HttpMethod|null $method
+ * @property int|null $category_id
  * @property int|null $city_id
  * @property string|null $url
  * @property array<string, mixed>|null $request_body
@@ -43,6 +45,7 @@ class Watcher extends Model
 
     protected $fillable = [
         'telegram_chat_id',
+        'source',
         'method',
         'category_id',
         'city_id',
@@ -55,6 +58,7 @@ class Watcher extends Model
     protected function casts(): array
     {
         return [
+            'source' => WatcherSource::class,
             'method' => HttpMethod::class,
             'request_body' => 'array',
             'last_seen_id' => 'integer',
@@ -154,7 +158,7 @@ class Watcher extends Model
     {
         return Attribute::make(
             get: function (): ?string {
-                if ($this->method !== HttpMethod::Get || $this->url === null) {
+                if ($this->source !== WatcherSource::Olx || $this->method !== HttpMethod::Get || $this->url === null) {
                     return null;
                 }
 

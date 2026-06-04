@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * @property int $id
  * @property int $olx_id
+ * @property string $source
  * @property string $telegram_chat_id
  * @property string $title
  * @property string $url
@@ -35,6 +36,7 @@ class SavedAd extends Model
 
     protected $fillable = [
         'olx_id',
+        'source',
         'telegram_chat_id',
         'title',
         'url',

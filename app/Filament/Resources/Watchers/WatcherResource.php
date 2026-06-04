@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Watchers;
 
 use App\Enums\HttpMethod;
+use App\Enums\WatcherSource;
 use App\Filament\Resources\Watchers\Pages\ManageWatchers;
 use App\Models\Category;
 use App\Models\City;
@@ -44,31 +45,45 @@ class WatcherResource extends Resource
                     ->required()
                     ->maxLength(255),
 
+                // Source selects the system; method only applies to OLX
+                Select::make('source')
+                    ->label('Система')
+                    ->options(collect(WatcherSource::cases())->mapWithKeys(
+                        fn (WatcherSource $s) => [$s->value => $s->label()]
+                    ))
+                    ->required()
+                    ->default(WatcherSource::Olx->value)
+                    ->native(false)
+                    ->live(),
+
                 Select::make('method')
+                    ->label('Метод (OLX)')
                     ->options(collect(HttpMethod::cases())->mapWithKeys(
                         fn (HttpMethod $m) => [$m->value => $m->label()]
                     ))
-                    ->required()
                     ->default(HttpMethod::Get->value)
                     ->native(false)
-                    ->live(),
+                    ->live()
+                    ->visible(fn (Get $get): bool => $get('source') === WatcherSource::Olx->value),
 
                 Select::make('category_id')
                     ->label('Category')
                     ->relationship('category', 'name')
                     ->searchable()
                     ->preload()
-                    ->required(),
+                    ->nullable()
+                    ->visible(fn (Get $get): bool => $get('source') === WatcherSource::Olx->value),
 
                 Select::make('city_id')
                     ->label('City')
                     ->relationship('city', 'name')
                     ->searchable()
                     ->preload()
-                    ->nullable(),
+                    ->nullable()
+                    ->visible(fn (Get $get): bool => $get('source') === WatcherSource::Olx->value),
 
-                // ── GET (REST) ────────────────────────────────────────────
-                Section::make('REST API (GET)')
+                // ── OLX: GET (REST) ───────────────────────────────────────
+                Section::make('OLX – REST API (GET)')
                     ->schema([
                         TextInput::make('url')
                             ->label('Base URL')
@@ -114,11 +129,12 @@ class WatcherResource extends Resource
                             ->content(fn (?Watcher $record): string => $record?->final_url ?? '—')
                             ->columnSpanFull(),
                     ])
-                    ->visible(fn (Get $get): bool => $get('method') === HttpMethod::Get->value)
+                    ->visible(fn (Get $get): bool => $get('source') === WatcherSource::Olx->value
+                        && $get('method') === HttpMethod::Get->value)
                     ->columnSpanFull(),
 
-                // ── GET HTML ──────────────────────────────────────────────
-                Section::make('GET – HTML')
+                // ── OLX: GET HTML ─────────────────────────────────────────
+                Section::make('OLX – GET HTML')
                     ->description('Paste the full OLX search page URL. Filters and sorting must be included in the URL directly.')
                     ->schema([
                         TextInput::make('url')
@@ -127,11 +143,12 @@ class WatcherResource extends Resource
                             ->columnSpanFull()
                             ->placeholder('https://www.olx.ua/uk/nedvizhimost/...'),
                     ])
-                    ->visible(fn (Get $get): bool => $get('method') === HttpMethod::GetHtml->value)
+                    ->visible(fn (Get $get): bool => $get('source') === WatcherSource::Olx->value
+                        && $get('method') === HttpMethod::GetHtml->value)
                     ->columnSpanFull(),
 
-                // ── POST (GraphQL) ────────────────────────────────────────
-                Section::make('GraphQL (POST)')
+                // ── OLX: POST (GraphQL) ───────────────────────────────────
+                Section::make('OLX – GraphQL (POST)')
                     ->description('Search parameters are built automatically from category, city, and filters below.')
                     ->schema([
                         CheckboxList::make('filterOptions')
@@ -159,7 +176,23 @@ class WatcherResource extends Resource
                             })
                             ->columnSpanFull(),
                     ])
-                    ->visible(fn (Get $get): bool => $get('method') === HttpMethod::Post->value)
+                    ->visible(fn (Get $get): bool => $get('source') === WatcherSource::Olx->value
+                        && $get('method') === HttpMethod::Post->value)
+                    ->columnSpanFull(),
+
+                // ── Auto.ria ──────────────────────────────────────────────
+                Section::make('Auto.ria – API Search URL')
+                    ->description(fn (?Watcher $record): string => $record?->url
+                        ? "Збережений URL: {$record->url}"
+                        : 'Вставте URL пошуку з developers.ria.com з потрібними фільтрами. Не включайте api_key, page та countpage — вони додаються автоматично.')
+                    ->schema([
+                        TextInput::make('url')
+                            ->label('API Search URL')
+                            ->maxLength(2048)
+                            ->columnSpanFull()
+                            ->placeholder('https://developers.ria.com/auto/search?category_id=1&state[0]=10&...'),
+                    ])
+                    ->visible(fn (Get $get): bool => $get('source') === WatcherSource::AutoRia->value)
                     ->columnSpanFull(),
             ]);
     }
@@ -179,14 +212,18 @@ class WatcherResource extends Resource
                     ->label('Chat ID')
                     ->searchable(),
 
-                TextColumn::make('method')
+                TextColumn::make('source')
+                    ->label('Система')
                     ->badge()
-                    ->formatStateUsing(fn (HttpMethod $state): string => $state->label())
-                    ->color(fn (HttpMethod $state): string => match ($state) {
-                        HttpMethod::Get => 'success',
-                        HttpMethod::GetHtml => 'info',
-                        HttpMethod::Post => 'warning',
-                    }),
+                    ->formatStateUsing(fn (WatcherSource $state): string => $state->label())
+                    ->color(fn (WatcherSource $state): string => $state->color()),
+
+                TextColumn::make('method')
+                    ->label('Метод')
+                    ->badge()
+                    ->color('gray')
+                    ->formatStateUsing(fn (?HttpMethod $state): string => $state?->label() ?? '—')
+                    ->placeholder('—'),
 
                 TextColumn::make('category.name')
                     ->label('Category')
@@ -215,7 +252,14 @@ class WatcherResource extends Resource
                     ->sortable(),
             ])
             ->filters([
+                SelectFilter::make('source')
+                    ->label('Система')
+                    ->options(collect(WatcherSource::cases())->mapWithKeys(
+                        fn (WatcherSource $s) => [$s->value => $s->label()]
+                    )),
+
                 SelectFilter::make('method')
+                    ->label('Метод')
                     ->options(collect(HttpMethod::cases())->mapWithKeys(
                         fn (HttpMethod $m) => [$m->value => $m->label()]
                     )),
@@ -243,11 +287,12 @@ class WatcherResource extends Resource
      * @return array<string, mixed> */
     public static function normalizeFormData(array $data): array
     {
-        if (($data['method'] ?? null) === HttpMethod::Post->value) {
-            $data['request_body'] = null;
+        $data['request_body'] = null;
+
+        if (($data['source'] ?? null) === WatcherSource::AutoRia->value) {
+            $data['method'] = null;
+        } elseif (($data['method'] ?? null) === HttpMethod::Post->value) {
             $data['url'] = 'https://www.olx.ua/apigateway/graphql';
-        } else {
-            $data['request_body'] = null;
         }
 
         return $data;

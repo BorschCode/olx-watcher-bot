@@ -3,10 +3,12 @@
 namespace App\Console\Commands;
 
 use App\Enums\HttpMethod;
+use App\Enums\WatcherSource;
 use App\Models\Listing;
 use App\Models\Watcher;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -24,6 +26,10 @@ class SyncOlxListings extends Command
     private const int LIMIT = 40;
 
     private const string GRAPHQL_ENDPOINT = 'https://www.olx.ua/apigateway/graphql';
+
+    private const string AUTORIA_SEARCH_ENDPOINT = 'https://developers.ria.com/auto/search';
+
+    private const string AUTORIA_INFO_ENDPOINT = 'https://developers.ria.com/auto/info';
 
     private const string GRAPHQL_QUERY = <<<'GRAPHQL'
 query ListingSearchQuery(
@@ -122,15 +128,23 @@ GRAPHQL;
 
         Log::info('Watcher sync started', [
             'watcher_id' => $watcher->id,
-            'method' => $watcher->method->value,
+            'source' => $watcher->source->value,
+            'method' => $watcher->method?->value,
             'last_seen_id' => $watcher->last_seen_id,
             'url' => $watcher->url,
         ]);
+
+        if ($watcher->source === WatcherSource::AutoRia) {
+            $this->syncAutoRiaWatcher($watcher);
+
+            return;
+        }
 
         $offers = match ($watcher->method) {
             HttpMethod::Get => $this->fetchViaRest($watcher),
             HttpMethod::GetHtml => $this->fetchViaHtmlLd($watcher),
             HttpMethod::Post => $this->fetchViaGraphql($watcher),
+            null => null,
         };
 
         if ($offers === null) {
@@ -243,6 +257,301 @@ GRAPHQL;
             'notified' => $notified,
             'total_new' => $total,
         ]);
+    }
+
+    private function syncAutoRiaWatcher(Watcher $watcher): void
+    {
+        $ids = $this->fetchAutoRiaIds($watcher);
+
+        if ($ids === null) {
+            Log::warning('Auto.ria fetch returned no data', ['watcher_id' => $watcher->id]);
+
+            return;
+        }
+
+        Log::info('Auto.ria IDs fetched', [
+            'watcher_id' => $watcher->id,
+            'total_ids' => count($ids),
+        ]);
+
+        $newIds = [];
+        $latestId = null;
+
+        foreach ($ids as $id) {
+            $id = (int) $id;
+
+            if ($watcher->last_seen_id && $id <= $watcher->last_seen_id) {
+                continue;
+            }
+
+            $latestId = max($latestId ?? 0, $id);
+            $newIds[] = $id;
+        }
+
+        if ($latestId !== null) {
+            $watcher->update(['last_seen_id' => $latestId]);
+
+            Log::info('Auto.ria watcher last_seen_id advanced', [
+                'watcher_id' => $watcher->id,
+                'new_last_seen_id' => $latestId,
+                'new_ids' => $newIds,
+            ]);
+        } else {
+            Log::info('Auto.ria watcher no new listings', [
+                'watcher_id' => $watcher->id,
+                'last_seen_id' => $watcher->last_seen_id,
+            ]);
+        }
+
+        $notified = 0;
+
+        foreach ($newIds as $riaId) {
+            $info = $this->fetchAutoRiaInfo($riaId);
+
+            if ($info === null) {
+                Log::warning('Auto.ria info fetch failed', ['watcher_id' => $watcher->id, 'ria_id' => $riaId]);
+                sleep(1);
+
+                continue;
+            }
+
+            try {
+                $this->sendAutoRiaNotification($watcher, $riaId, $info);
+                $notified++;
+                Log::info('Auto.ria offer notified', ['watcher_id' => $watcher->id, 'ria_id' => $riaId]);
+            } catch (\Throwable $e) {
+                Log::error('Auto.ria Telegram notification failed', [
+                    'watcher_id' => $watcher->id,
+                    'ria_id' => $riaId,
+                    'error' => $e->getMessage(),
+                ]);
+                $this->warn("  Notification failed for ria #{$riaId}: {$e->getMessage()}");
+            }
+
+            sleep(1);
+        }
+
+        $total = count($newIds);
+        $this->line("  Done. {$notified}/{$total} notified.");
+
+        Log::info('Auto.ria watcher sync finished', [
+            'watcher_id' => $watcher->id,
+            'notified' => $notified,
+            'total_new' => $total,
+        ]);
+    }
+
+    /** @return int[]|null */
+    private function fetchAutoRiaIds(Watcher $watcher): ?array
+    {
+        $apiKey = config('services.autoria.key');
+
+        if (! $apiKey) {
+            Log::error('AUTORIA_API_KEY is not configured');
+            $this->error('  AUTORIA_API_KEY is not configured');
+
+            return null;
+        }
+
+        if ($watcher->url === null) {
+            $this->warn('  No URL configured for auto.ria watcher, skipping.');
+
+            return null;
+        }
+
+        $separator = str_contains($watcher->url, '?') ? '&' : '?';
+        $url = $watcher->url.$separator.http_build_query([
+            'api_key' => $apiKey,
+            'countpage' => 100,
+            'page' => 0,
+            'order_by' => 7,
+        ]);
+
+        $response = $this->fetchAutoRiaWithRetry($url);
+
+        if ($response === null) {
+            return null;
+        }
+
+        return array_map('intval', $response->json('result.search_result.ids', []));
+    }
+
+    /** @return array<string, mixed>|null */
+    private function fetchAutoRiaInfo(int $riaId): ?array
+    {
+        $apiKey = config('services.autoria.key');
+
+        $response = $this->fetchAutoRiaWithRetry(self::AUTORIA_INFO_ENDPOINT.'?'.http_build_query([
+            'api_key' => $apiKey,
+            'auto_id' => $riaId,
+            'lang_id' => 4,
+        ]));
+
+        if ($response === null) {
+            return null;
+        }
+
+        $data = $response->json();
+
+        if (! is_array($data) || isset($data['error'])) {
+            return null;
+        }
+
+        return $data;
+    }
+
+    private function fetchAutoRiaWithRetry(string $url, int $maxRetries = 3): ?Response
+    {
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            $response = Http::get($url);
+
+            if ($response->successful()) {
+                return $response;
+            }
+
+            $apiError = $response->json('error') ?? $response->body();
+            $status = $response->status();
+
+            if ($status === 429) {
+                $wait = $attempt * 10;
+                Log::warning('Auto.ria rate limit hit, retrying', [
+                    'attempt' => $attempt,
+                    'wait_seconds' => $wait,
+                    'message' => $apiError,
+                ]);
+                $this->warn("  Auto.ria rate limit (attempt {$attempt}/{$maxRetries}): {$apiError}");
+                $this->warn("  Waiting {$wait}s…");
+                sleep($wait);
+
+                continue;
+            }
+
+            Log::error('Auto.ria API error', ['status' => $status, 'message' => $apiError]);
+            $this->error("  Auto.ria API error {$status}: {$apiError}");
+
+            return null;
+        }
+
+        $this->error("  Auto.ria rate limit persists after {$maxRetries} retries. Skipping.");
+
+        return null;
+    }
+
+    /** @param array<string, mixed> $info */
+    private function sendAutoRiaNotification(Watcher $watcher, int $riaId, array $info): void
+    {
+        $autoData = $info['autoData'] ?? [];
+
+        $title = trim(($info['markName'] ?? '').' '.($info['modelName'] ?? ''));
+
+        if ($autoData['year'] ?? null) {
+            $title = "{$autoData['year']} {$title}";
+        }
+
+        $priceUsd = isset($info['USD']) ? (int) $info['USD'] : null;
+        // raceInt is in thousands km; fall back to parsing the formatted string
+        $mileageThousands = $autoData['raceInt'] ?? null;
+        $mileage = $mileageThousands !== null
+            ? number_format((int) $mileageThousands * 1000, 0, '.', ' ').' км'
+            : (isset($autoData['race']) ? $autoData['race'] : null);
+        $fuel = $autoData['fuelName'] ?? null;
+        $gearbox = $autoData['gearboxName'] ?? null;
+        $city = $info['locationCityName'] ?? ($info['stateData']['name'] ?? null);
+        $addDate = $info['addDate'] ?? null;
+
+        $rawLink = $info['linkToView'] ?? null;
+        $url = $rawLink
+            ? (str_starts_with($rawLink, 'http') ? $rawLink : 'https://auto.ria.com'.$rawLink)
+            : "https://auto.ria.com/uk/auto_{$riaId}.html";
+
+        $images = $this->extractAutoRiaImages($info['photoData'] ?? []);
+
+        Cache::put("autoria_offer_{$riaId}", [
+            'info' => $info,
+            'watcher_id' => $watcher->id,
+            'telegram_chat_id' => $watcher->telegram_chat_id,
+            'title' => $title,
+            'price_usd' => $priceUsd,
+            'images' => $images,
+        ], now()->addDays(7));
+
+        $caption = implode("\n", array_filter([
+            "🚗 <b>{$title}</b>",
+            $priceUsd ? '💰 '.number_format($priceUsd, 0, '.', ' ').' $' : null,
+            $mileage ? "🛣 {$mileage}" : null,
+            ($fuel || $gearbox) ? '⛽ '.implode(' | ', array_filter([$fuel, $gearbox])) : null,
+            $city ? "📍 {$city}" : null,
+            $addDate ? "📅 Додано: {$addDate}" : null,
+            "🔗 {$url}",
+            "👁 Watcher #{$watcher->id}",
+        ]));
+
+        $replyMarkup = InlineKeyboardMarkup::make()->addRow(
+            InlineKeyboardButton::make('💾 Зберегти на потім', callback_data: "save_ria_{$riaId}"),
+        );
+
+        if (count($images) > 1) {
+            $media = array_map(
+                fn (string $imgUrl) => InputMediaPhoto::make(media: $imgUrl),
+                array_slice($images, 0, 10),
+            );
+
+            $this->sendWithRetry(fn () => Telegram::sendMediaGroup(
+                media: $media,
+                chat_id: $watcher->telegram_chat_id,
+            ));
+
+            $this->sendWithRetry(fn () => Telegram::sendMessage(
+                text: $caption,
+                parse_mode: 'HTML',
+                reply_markup: $replyMarkup,
+                chat_id: $watcher->telegram_chat_id,
+            ));
+        } elseif ($images !== []) {
+            $this->sendWithRetry(fn () => Telegram::sendPhoto(
+                photo: $images[0],
+                caption: $caption,
+                parse_mode: 'HTML',
+                reply_markup: $replyMarkup,
+                chat_id: $watcher->telegram_chat_id,
+            ));
+        } else {
+            $this->sendWithRetry(fn () => Telegram::sendMessage(
+                text: $caption,
+                parse_mode: 'HTML',
+                reply_markup: $replyMarkup,
+                chat_id: $watcher->telegram_chat_id,
+            ));
+        }
+    }
+
+    /**
+     * Build full photo URLs from photoData.all IDs using seoLinkM as the URL template.
+     * Pattern: https://cdn2.riastatic.com/photosnew/auto/photo/bmw_i3__594836112m.jpg
+     *
+     * @param  array<string, mixed>  $photoData
+     * @return string[]
+     */
+    private function extractAutoRiaImages(array $photoData): array
+    {
+        $template = $photoData['seoLinkM'] ?? $photoData['seoLinkF'] ?? null;
+        $ids = $photoData['all'] ?? [];
+
+        if ($template === null || $ids === []) {
+            return array_filter([$template]);
+        }
+
+        // Extract URL prefix and suffix around the first photo ID
+        if (! preg_match('/^(.*?)(\d+)(m\.jpg)$/', $template, $m)) {
+            return [$template];
+        }
+
+        [$base, $suffix] = [$m[1], $m[3]];
+
+        return array_values(array_map(
+            fn (int|string $id) => $base.$id.$suffix,
+            $ids,
+        ));
     }
 
     /** @return array<int, array<string, mixed>>|null */
