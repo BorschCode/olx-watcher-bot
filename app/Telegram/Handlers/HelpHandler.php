@@ -3,36 +3,54 @@
 namespace App\Telegram\Handlers;
 
 use App\Support\AppUrl;
+use App\Telegram\Handlers\Concerns\LogsTelegramCommand;
 use SergiX44\Nutgram\Nutgram;
 
 class HelpHandler
 {
+    use LogsTelegramCommand;
+
     public function __invoke(Nutgram $bot): void
     {
-        $appUrl = AppUrl::base();
-        $watchersUrl = AppUrl::adminWatchers();
+        $command = $this->resolveCommand($bot);
 
-        $text = implode("\n", [
-            '👋 <b>OLX Watcher Bot</b>',
-            '',
-            'Цей бот стежить за оголошеннями на OLX та надсилає сповіщення про нові.',
-            '',
-            '<b>Команди:</b>',
-            '/saved — переглянути останні 10 збережених оголошень',
-            '/myid — показати ваш Chat ID та User ID',
-            '/help — показати цю довідку',
-            '',
-            '<b>Керування:</b>',
-            "🌐 Додаток: <a href=\"{$appUrl}\">{$appUrl}</a>",
-            "⚙️ Спостерігачі: <a href=\"{$watchersUrl}\">{$watchersUrl}</a>",
-            '',
-            '<b>Як зберегти оголошення?</b>',
-            'Коли бот надсилає сповіщення, натисніть кнопку <i>💾 Зберегти на потім</i> під повідомленням.',
-        ]);
+        $this->runLoggedCommand($bot, $command, function () use ($bot): void {
+            $appUrl = AppUrl::base();
+            $watchersUrl = AppUrl::adminWatchers();
 
-        $bot->sendMessage(
-            text: $text,
-            parse_mode: 'HTML',
-        );
+            $text = implode("\n", [
+                '👋 <b>OLX Watcher Bot</b>',
+                '',
+                'Цей бот стежить за оголошеннями на OLX та надсилає сповіщення про нові.',
+                '',
+                '<b>Команди:</b>',
+                '/saved — переглянути останні 10 збережених оголошень',
+                '/myid — показати ваш Chat ID та User ID',
+                '/help — показати цю довідку',
+                '',
+                '<b>Керування:</b>',
+                "🌐 Додаток: <a href=\"{$appUrl}\">{$appUrl}</a>",
+                "⚙️ Спостерігачі: <a href=\"{$watchersUrl}\">{$watchersUrl}</a>",
+                '',
+                '<b>Як зберегти оголошення?</b>',
+                'Коли бот надсилає сповіщення, натисніть кнопку <i>💾 Зберегти на потім</i> під повідомленням.',
+            ]);
+
+            $bot->sendMessage(
+                text: $text,
+                parse_mode: 'HTML',
+            );
+        });
+    }
+
+    private function resolveCommand(Nutgram $bot): string
+    {
+        $text = $bot->message()?->text ?? '';
+
+        if (preg_match('/^\/(\w+)/', $text, $matches) === 1) {
+            return $matches[1];
+        }
+
+        return 'help';
     }
 }

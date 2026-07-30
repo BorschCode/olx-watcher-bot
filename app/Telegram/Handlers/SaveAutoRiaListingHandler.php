@@ -12,6 +12,13 @@ class SaveAutoRiaListingHandler
 {
     public function __invoke(Nutgram $bot, string $riaId): void
     {
+        Log::info('SaveAutoRiaListingHandler invoked', [
+            'ria_id' => $riaId,
+            'chat_id' => $bot->chatId(),
+            'user_id' => $bot->userId(),
+            'callback_data' => $bot->currentUpdate()?->callback_query?->data,
+        ]);
+
         $cached = Cache::get("autoria_offer_{$riaId}");
 
         if ($cached === null) {
