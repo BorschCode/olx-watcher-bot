@@ -142,11 +142,25 @@ jobs:
           WWWGROUP=1000
 
           TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_BOT_USERNAME=${{ vars.TELEGRAM_BOT_USERNAME }}
           TELEGRAM_ADMIN_CHAT_ID=${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
 
           AUTORIA_API_KEY=${{ secrets.AUTORIA_API_KEY }}
 
           EOF
+
+      - name: Resolve Telegram bot username
+        run: |
+          USERNAME="${{ vars.TELEGRAM_BOT_USERNAME }}"
+          if [ -z "${USERNAME}" ]; then
+            USERNAME=$(curl -sf "https://api.telegram.org/bot${TELEGRAM_TOKEN}/getMe" | jq -r '.result.username // empty')
+          fi
+          if [ -n "${USERNAME}" ]; then
+            sed -i "s/^TELEGRAM_BOT_USERNAME=.*/TELEGRAM_BOT_USERNAME=${USERNAME}/" .env
+            echo "Using bot username: ${USERNAME}"
+          else
+            echo "TELEGRAM_BOT_USERNAME not set; /command@bot parsing in groups may fail"
+          fi
 
       - name: Deploy with Docker Compose
         run: |
@@ -201,6 +215,9 @@ jobs:
           docker exec olx-watcher-bot php artisan route:cache
           docker exec olx-watcher-bot php artisan view:cache
           docker exec olx-watcher-bot php artisan optimize
+
+      - name: Register Telegram bot commands
+        run: docker exec olx-watcher-bot php artisan nutgram:register-commands
 
       - name: Restart daemons
         run: |

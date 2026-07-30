@@ -10,6 +10,7 @@ return [
     // Extra or specific configurations
     'config' => [
         'timeout' => 30,
+        'bot_name' => env('TELEGRAM_BOT_USERNAME'),
     ],
 
     // Set if the service provider should automatically load
