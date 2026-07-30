@@ -740,14 +740,37 @@ GRAPHQL;
             'created_time' => $ad['createdTime'] ?? null,
             'last_refresh_time' => $ad['lastRefreshTime'] ?? null,
             'price_valid_until' => $ad['validToTime'] ?? null,
-            'params' => isset($ad['price']['regularPrice']['value'])
-                ? [['key' => 'price', 'value' => ['value' => $ad['price']['regularPrice']['value']]]]
-                : [],
+            'params' => $this->buildParamsFromPrerenderedAd($ad),
             'photos' => array_map(
                 fn (string $url) => ['link' => $url],
                 $ad['photos'] ?? [],
             ),
         ], $ads));
+    }
+
+    /** @param  array<string, mixed>  $ad
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildParamsFromPrerenderedAd(array $ad): array
+    {
+        $params = [];
+
+        if (isset($ad['price']['regularPrice']['value'])) {
+            $params[] = [
+                'key' => 'price',
+                'value' => ['value' => $ad['price']['regularPrice']['value']],
+            ];
+        }
+
+        foreach ($ad['params'] ?? [] as $param) {
+            if (! is_array($param) || ($param['key'] ?? '') === 'price') {
+                continue;
+            }
+
+            $params[] = $param;
+        }
+
+        return $params;
     }
 
     private function decodeOlxIdFromUrl(string $url): int
@@ -787,6 +810,8 @@ GRAPHQL;
     private function sendNotification(Watcher $watcher, array $offer): void
     {
         $price = Listing::extractPrice($offer);
+        $rooms = Listing::extractRooms($offer);
+        $totalArea = Listing::extractTotalArea($offer);
         $images = Listing::extractImages($offer);
 
         Cache::put("olx_offer_{$offer['id']}", [
@@ -814,6 +839,8 @@ GRAPHQL;
         $caption = implode("\n", array_filter([
             "🆕 <b>{$offer['title']}</b>",
             $price ? '💰 '.number_format($price, 0, '.', ' ').' грн' : null,
+            $rooms ? "🚪 Кімнат: {$rooms}" : null,
+            $totalArea ? "📐 Площа: {$totalArea}" : null,
             $createdAt ? "📅 Опубліковано: {$createdAt}" : null,
             $refreshedAt && $refreshedAt !== $createdAt ? "🔄 Оновлено: {$refreshedAt}" : null,
             $validUntil ? "⏰ Активно до: {$validUntil}" : null,

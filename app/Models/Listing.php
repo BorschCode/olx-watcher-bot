@@ -64,6 +64,53 @@ class Listing extends Model
         return null;
     }
 
+    /** @param array<string, mixed> $offer */
+    public static function extractRooms(array $offer): ?string
+    {
+        return self::extractParamDisplayValue($offer, 'number_of_rooms')
+            ?? self::extractParamDisplayValue($offer, 'number_of_rooms_string');
+    }
+
+    /** @param array<string, mixed> $offer */
+    public static function extractTotalArea(array $offer): ?string
+    {
+        return self::extractParamDisplayValue($offer, 'total_area');
+    }
+
+    /**
+     * @param  array<string, mixed>  $offer
+     */
+    public static function extractParamDisplayValue(array $offer, string $key): ?string
+    {
+        foreach ($offer['params'] ?? [] as $param) {
+            if (($param['key'] ?? null) !== $key) {
+                continue;
+            }
+
+            $value = $param['value'] ?? null;
+
+            if (is_string($value)) {
+                return $value !== '' ? $value : null;
+            }
+
+            if (is_array($value)) {
+                $label = $value['label'] ?? null;
+
+                if (is_string($label) && $label !== '') {
+                    return $label;
+                }
+
+                if (isset($value['key'])) {
+                    return (string) $value['key'];
+                }
+            }
+
+            return null;
+        }
+
+        return null;
+    }
+
     /** @return string[] */
     public static function extractImages(array $offer): array
     {
