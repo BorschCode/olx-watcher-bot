@@ -24,7 +24,7 @@ return [
     'namespace' => app_path('Telegram'),
 
     // Set log channel
-    'log_channel' => env('TELEGRAM_LOG_CHANNEL', 'null'),
+    'log_channel' => env('TELEGRAM_LOG_CHANNEL', env('LOG_CHANNEL', 'stack')),
 
     // Chat ID with unrestricted access across all users' data
     'admin_chat_id' => env('TELEGRAM_ADMIN_CHAT_ID', ''),

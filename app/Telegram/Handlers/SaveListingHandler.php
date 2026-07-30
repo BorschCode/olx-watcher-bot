@@ -15,6 +15,13 @@ class SaveListingHandler
 {
     public function __invoke(Nutgram $bot, string $olxId): void
     {
+        Log::info('SaveListingHandler invoked', [
+            'olx_id' => $olxId,
+            'chat_id' => $bot->chatId(),
+            'user_id' => $bot->userId(),
+            'callback_data' => $bot->currentUpdate()?->callback_query?->data,
+        ]);
+
         $cached = Cache::get("olx_offer_{$olxId}")
             ?? $this->fetchFromOlxApi((int) $olxId, (string) $bot->chatId());
 
