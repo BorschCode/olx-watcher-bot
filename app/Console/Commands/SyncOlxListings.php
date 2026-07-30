@@ -698,15 +698,14 @@ GRAPHQL;
     /** @return array<int, array<string, mixed>>|null */
     private function parsePrerenderedAds(string $html): ?array
     {
-        $marker = 'window.__PRERENDERED_STATE__ = ';
-        $markerPos = strpos($html, $marker);
-
-        if ($markerPos === false || ($html[$markerPos + strlen($marker)] ?? '') !== '"') {
+        if (! preg_match('/window\.__PRERENDERED_STATE__\s*=\s*"/', $html, $matches, PREG_OFFSET_CAPTURE)) {
             return null;
         }
 
+        $quotePos = $matches[0][1] + strlen($matches[0][0]) - 1;
+
         // Scan past the opening quote, respecting backslash escapes, to find the closing quote
-        $i = $markerPos + strlen($marker) + 1;
+        $i = $quotePos + 1;
         $len = strlen($html);
         while ($i < $len) {
             $c = $html[$i];
@@ -719,7 +718,7 @@ GRAPHQL;
             }
         }
 
-        $jsonStringLiteral = substr($html, $markerPos + strlen($marker), $i - $markerPos - strlen($marker) + 1);
+        $jsonStringLiteral = substr($html, $quotePos, $i - $quotePos + 1);
         $innerJson = json_decode($jsonStringLiteral);
 
         if (! is_string($innerJson)) {
