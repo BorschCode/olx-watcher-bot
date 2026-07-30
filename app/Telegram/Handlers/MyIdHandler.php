@@ -14,7 +14,7 @@ class MyIdHandler
         $this->runLoggedCommand($bot, 'myid', function () use ($bot): void {
             $chatId = $bot->chatId();
             $userId = $bot->userId();
-            $chatType = $bot->chat()?->type ?? 'unknown';
+            $chatType = $bot->chat()?->type?->value ?? 'unknown';
 
             $lines = [
                 '🆔 <b>Ідентифікатори чату</b>',
