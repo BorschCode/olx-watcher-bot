@@ -39,6 +39,21 @@ test('bot responds to myid command', function () {
         ->assertCalled('sendMessage');
 });
 
+test('bot responds to group commands with bot username suffix', function () {
+    config(['nutgram.config.bot_name' => 'olx_watchaslkjd_bot']);
+
+    /** @var FakeNutgram $bot */
+    $bot = app(Nutgram::class);
+
+    $bot->hearText('/saved@olx_watchaslkjd_bot')
+        ->reply()
+        ->assertCalled('sendMessage');
+
+    $bot->hearText('/myid@olx_watchaslkjd_bot')
+        ->reply()
+        ->assertCalled('sendMessage');
+});
+
 test('bot responds to save callback query', function () {
     /** @var FakeNutgram $bot */
     $bot = app(Nutgram::class);
