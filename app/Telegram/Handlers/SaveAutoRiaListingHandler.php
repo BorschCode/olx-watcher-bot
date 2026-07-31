@@ -16,7 +16,7 @@ class SaveAutoRiaListingHandler
             'ria_id' => $riaId,
             'chat_id' => $bot->chatId(),
             'user_id' => $bot->userId(),
-            'callback_data' => $bot->currentUpdate()?->callback_query?->data,
+            'callback_data' => $bot->callbackQuery()?->data,
         ]);
 
         $cached = Cache::get("autoria_offer_{$riaId}");

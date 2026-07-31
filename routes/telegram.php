@@ -33,12 +33,14 @@ $bot->onCallbackQueryData('save_{olxId}', SaveListingHandler::class);
 $bot->onCallbackQueryData('save_ria_{riaId}', SaveAutoRiaListingHandler::class);
 
 $bot->fallback(function (Nutgram $bot): void {
+    $update = $bot->update();
+
     Log::warning('Telegram update had no matching handler', [
-        'update_id' => $bot->currentUpdate()?->update_id,
-        'update_type' => $bot->currentUpdate()?->getType()?->value,
+        'update_id' => isset($update->update_id) ? $update->update_id : null,
+        'update_type' => $update?->getType()?->value,
         'chat_id' => $bot->chatId(),
         'user_id' => $bot->userId(),
         'text' => $bot->message()?->text,
-        'callback_data' => $bot->currentUpdate()?->callback_query?->data,
+        'callback_data' => $bot->callbackQuery()?->data,
     ]);
 });
