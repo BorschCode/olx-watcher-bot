@@ -2,11 +2,13 @@
 
 namespace App\Providers;
 
+use App\Telegram\BotUsernameResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use SergiX44\Nutgram\Nutgram;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -15,7 +17,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->beforeResolving(Nutgram::class, function (): void {
+            BotUsernameResolver::resolve();
+        });
     }
 
     /**
