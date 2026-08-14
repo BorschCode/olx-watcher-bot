@@ -6,6 +6,7 @@ use App\Enums\HttpMethod;
 use App\Enums\WatcherSource;
 use App\Models\Listing;
 use App\Models\Watcher;
+use App\Support\OlxHttpClient;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Http\Client\Response;
@@ -30,6 +31,8 @@ class SyncOlxListings extends Command
     private const string AUTORIA_SEARCH_ENDPOINT = 'https://developers.ria.com/auto/search';
 
     private const string AUTORIA_INFO_ENDPOINT = 'https://developers.ria.com/auto/info';
+
+    private ?OlxHttpClient $olxHttp = null;
 
     private const string GRAPHQL_QUERY = <<<'GRAPHQL'
 query ListingSearchQuery(
@@ -568,16 +571,14 @@ GRAPHQL;
         $separator = str_contains($baseUrl, '?') ? '&' : '?';
         $url = $baseUrl.$separator.http_build_query(['offset' => 0, 'limit' => self::LIMIT]);
 
-        $response = Http::withHeaders([
-            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            'Accept' => 'application/json, text/plain, */*',
-            'Accept-Language' => 'uk-UA,uk;q=0.9',
-            'Referer' => 'https://www.olx.ua/',
-            'Origin' => 'https://www.olx.ua',
-        ])->get($url);
+        $response = $this->olxHttp()->get(
+            url: $url,
+            context: 'json',
+            watcherId: $watcher->id,
+            logKey: 'OLX REST API error',
+        );
 
         if (! $response->successful()) {
-            Log::error('OLX REST API error', ['watcher' => $watcher->id, 'status' => $response->status()]);
             $this->error("  REST API error {$response->status()}");
 
             return null;
@@ -589,23 +590,21 @@ GRAPHQL;
     /** @return array<int, array<string, mixed>>|null */
     private function fetchViaGraphql(Watcher $watcher): ?array
     {
-        $response = Http::withHeaders([
-            'Content-Type' => 'application/json',
-            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            'Accept' => 'application/json',
-            'Accept-Language' => 'uk-UA,uk;q=0.9',
-            'Origin' => 'https://www.olx.ua',
-            'Referer' => 'https://www.olx.ua/',
-        ])->post(self::GRAPHQL_ENDPOINT, [
-            'query' => self::GRAPHQL_QUERY,
-            'variables' => [
-                'searchParameters' => $watcher->buildSearchParameters(offset: 0, limit: self::LIMIT),
-                'fetchPayAndShip' => false,
+        $response = $this->olxHttp()->post(
+            url: self::GRAPHQL_ENDPOINT,
+            payload: [
+                'query' => self::GRAPHQL_QUERY,
+                'variables' => [
+                    'searchParameters' => $watcher->buildSearchParameters(offset: 0, limit: self::LIMIT),
+                    'fetchPayAndShip' => false,
+                ],
             ],
-        ]);
+            context: 'graphql',
+            watcherId: $watcher->id,
+            logKey: 'OLX GraphQL HTTP error',
+        );
 
         if (! $response->successful()) {
-            Log::error('OLX GraphQL HTTP error', ['watcher' => $watcher->id, 'status' => $response->status()]);
             $this->error("  GraphQL HTTP error {$response->status()}");
 
             return null;
@@ -633,15 +632,14 @@ GRAPHQL;
             return null;
         }
 
-        $response = Http::withHeaders([
-            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language' => 'uk-UA,uk;q=0.9',
-            'Referer' => 'https://www.olx.ua/',
-        ])->get($watcher->url);
+        $response = $this->olxHttp()->get(
+            url: $watcher->url,
+            context: 'html',
+            watcherId: $watcher->id,
+            logKey: 'OLX HTML fetch error',
+        );
 
         if (! $response->successful()) {
-            Log::error('OLX HTML fetch error', ['watcher' => $watcher->id, 'status' => $response->status()]);
             $this->error("  HTML fetch error {$response->status()}");
 
             return null;
@@ -910,6 +908,11 @@ GRAPHQL;
                 }
             }
         }
+    }
+
+    private function olxHttp(): OlxHttpClient
+    {
+        return $this->olxHttp ??= new OlxHttpClient;
     }
 
     private function formatOfferDate(mixed $date): ?string

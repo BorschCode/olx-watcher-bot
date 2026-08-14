@@ -43,4 +43,12 @@ return [
         'bot_token' => env('TELEGRAM_BOT_TOKEN'),
     ],
 
+    'olx' => [
+        'proxy' => env('OLX_HTTP_PROXY'),
+        'proxy_verify' => env('OLX_HTTP_PROXY_VERIFY', true),
+        'fetch_retries' => (int) env('OLX_FETCH_RETRIES', 3),
+        'timeout' => (int) env('OLX_HTTP_TIMEOUT', 20),
+        'connect_timeout' => (int) env('OLX_HTTP_CONNECT_TIMEOUT', 10),
+    ],
+
 ];
