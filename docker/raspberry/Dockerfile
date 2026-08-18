@@ -35,9 +35,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y \
         supervisor unzip curl \
-        libpq-dev libzip-dev libicu-dev libonig-dev libxml2-dev \
+        libcurl4-openssl-dev libpq-dev libzip-dev libicu-dev libonig-dev libxml2-dev \
     && docker-php-ext-install \
-        pdo_pgsql pgsql mbstring xml zip bcmath intl \
+        curl pdo_pgsql pgsql mbstring xml zip bcmath intl \
     && pecl install redis \
     && docker-php-ext-enable redis \
     && apt-get -y autoremove \
