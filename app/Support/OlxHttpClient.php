@@ -2,7 +2,10 @@
 
 namespace App\Support;
 
+use GuzzleHttp\Psr7\Response as PsrResponse;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -167,9 +170,30 @@ class OlxHttpClient
             $fingerprint = $this->randomFingerprint($context);
             $request = $this->client($fingerprint['headers']);
 
-            $response = $method === 'POST'
-                ? $request->post($url, $payload ?? [])
-                : $request->get($url);
+            try {
+                $response = $method === 'POST'
+                    ? $request->post($url, $payload ?? [])
+                    : $request->get($url);
+            } catch (ConnectionException|RequestException $exception) {
+                $response = $exception instanceof RequestException
+                    ? $exception->response
+                    : new Response(new PsrResponse(502));
+                $logContext = [
+                    ...$this->buildLogContext($response, $fingerprint, $url, $watcherId, $attempt),
+                    'exception' => $exception->getMessage(),
+                ];
+
+                if ($attempt < $this->maxRetries) {
+                    Log::warning('OLX request failed, retrying with a new proxy', $logContext);
+                    sleep($attempt * 2);
+
+                    continue;
+                }
+
+                Log::error($logKey, $logContext);
+
+                return $response;
+            }
 
             if ($response->successful()) {
                 if ($attempt > 1) {
@@ -198,7 +222,7 @@ class OlxHttpClient
             return $response;
         }
 
-        return $response ?? Http::response('', 500);
+        return $response ?? new Response(new PsrResponse(500));
     }
 
     /**

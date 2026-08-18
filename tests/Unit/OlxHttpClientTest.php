@@ -2,6 +2,7 @@
 
 use App\Support\OlxHttpClient;
 use App\Support\OlxProxyPool;
+use GuzzleHttp\Promise\Create;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -58,6 +59,42 @@ test('retries 403 with a new fingerprint before failing', function () {
     expect($response->successful())->toBeTrue();
 
     Http::assertSentCount(2);
+});
+
+test('retries a proxy connection failure before succeeding', function () {
+    $attempts = 0;
+
+    Http::fake(function () use (&$attempts) {
+        $attempts++;
+
+        return $attempts === 1
+            ? Http::failedConnection('Proxy connection failed.')
+            : Http::response('<html>ok</html>', 200);
+    });
+
+    $client = new OlxHttpClient(maxRetries: 2);
+    $response = $client->get('https://www.olx.ua/blocked', watcherId: 8);
+
+    expect($response->successful())->toBeTrue()
+        ->and($attempts)->toBe(2);
+});
+
+test('retries a proxy request failure before succeeding', function () {
+    $attempts = 0;
+
+    Http::fake(function () use (&$attempts) {
+        $attempts++;
+
+        return $attempts === 1
+            ? Create::rejectionFor(Http::failedRequest('Proxy rejected the request.', 400))
+            : Http::response('<html>ok</html>', 200);
+    });
+
+    $client = new OlxHttpClient(maxRetries: 2);
+    $response = $client->get('https://www.olx.ua/blocked', watcherId: 8);
+
+    expect($response->successful())->toBeTrue()
+        ->and($attempts)->toBe(2);
 });
 
 test('applies configured proxy to outgoing requests', function () {
@@ -148,7 +185,7 @@ test('proxy pool refresh replaces its list with valid downloaded endpoints', fun
             'invalid',
             'http://5.45.126.128:8080',
         ])),
-        'https://www.olx.ua/robots.txt' => Http::response('User-agent: *', 200),
+        'https://www.olx.ua/uk/nedvizhimost/' => Http::response('<html>ok</html>', 200),
     ]);
 
     $path = tempnam(sys_get_temp_dir(), 'olx-proxies-');
@@ -175,8 +212,8 @@ test('proxy pool refresh retains only proxies that can reach OLX', function () {
             'socks5://149.62.186.244:1080',
             'http://5.45.126.128:8080',
         ])),
-        'https://www.olx.ua/robots.txt' => Http::sequence()
-            ->push('User-agent: *', 200)
+        'https://www.olx.ua/uk/nedvizhimost/' => Http::sequence()
+            ->push('<html>ok</html>', 200)
             ->push('blocked', 403),
     ]);
 
@@ -198,7 +235,7 @@ test('proxy pool refresh retains only proxies that can reach OLX', function () {
 test('proxy pool refresh preserves the existing list when no proxy passes validation', function () {
     Http::fake([
         'https://proxy-list.test/data.txt' => Http::response('http://5.45.126.128:8080'),
-        'https://www.olx.ua/robots.txt' => Http::response('blocked', 403),
+        'https://www.olx.ua/uk/nedvizhimost/' => Http::response('blocked', 403),
     ]);
 
     $path = tempnam(sys_get_temp_dir(), 'olx-proxies-');
@@ -219,7 +256,7 @@ test('proxy pool refresh preserves the existing list when no proxy passes valida
 test('proxy pool refreshes a missing list before selecting a proxy', function () {
     Http::fake([
         'https://proxy-list.test/data.txt' => Http::response('http://5.45.126.128:8080'),
-        'https://www.olx.ua/robots.txt' => Http::response('User-agent: *', 200),
+        'https://www.olx.ua/uk/nedvizhimost/' => Http::response('<html>ok</html>', 200),
     ]);
 
     $path = sys_get_temp_dir().'/olx-proxies-'.uniqid().'.txt';
@@ -269,6 +306,28 @@ test('refresh proxy command keeps a current proxy list', function () {
     try {
         $this->artisan('olx:refresh-proxies')
             ->expectsOutput('OLX proxy list is current.')
+            ->assertExitCode(0);
+    } finally {
+        if ($originalContents === null) {
+            unlink($path);
+        } else {
+            file_put_contents($path, $originalContents);
+        }
+    }
+});
+
+test('refresh proxy command force validates a current proxy list', function () {
+    Http::fake([
+        '*' => Http::response('http://5.45.126.128:8080'),
+    ]);
+
+    $path = storage_path('app/private/olx-proxies.txt');
+    $originalContents = is_file($path) ? file_get_contents($path) : null;
+    file_put_contents($path, 'http://old.proxy:8080');
+
+    try {
+        $this->artisan('olx:refresh-proxies --force')
+            ->expectsOutput('Refreshed 1 OLX proxies.')
             ->assertExitCode(0);
     } finally {
         if ($originalContents === null) {

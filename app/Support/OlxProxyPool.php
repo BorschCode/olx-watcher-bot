@@ -12,7 +12,7 @@ class OlxProxyPool
 
     private const int REFRESH_INTERVAL_SECONDS = 86400;
 
-    private const string VALIDATION_URL = 'https://www.olx.ua/robots.txt';
+    private const string VALIDATION_URL = 'https://www.olx.ua/uk/nedvizhimost/';
 
     private const int VALIDATION_TIMEOUT_SECONDS = 5;
 

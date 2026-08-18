@@ -7,13 +7,15 @@ use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 
-#[Signature('olx:refresh-proxies')]
+#[Signature('olx:refresh-proxies {--force : Validate and replace the current proxy list immediately}')]
 #[Description('Refresh the public OLX proxy list')]
 class RefreshOlxProxies extends Command
 {
     public function handle(OlxProxyPool $proxyPool): int
     {
-        $proxyCount = $proxyPool->refreshIfStale();
+        $proxyCount = $this->option('force')
+            ? $proxyPool->refresh()
+            : $proxyPool->refreshIfStale();
 
         if ($proxyCount === 0) {
             if ($proxyPool->all() !== []) {
