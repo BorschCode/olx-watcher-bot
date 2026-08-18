@@ -14,6 +14,8 @@ class OlxHttpClient
 
     private const int CHROME_VERSION_MAX = 131;
 
+    private ?string $lastProxy = null;
+
     /** @var list<string> */
     private const ACCEPT_LANGUAGES = [
         'uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -57,10 +59,12 @@ class OlxHttpClient
         private ?string $proxy = null,
         private bool $proxyVerify = true,
         private int $maxRetries = 3,
+        private ?OlxProxyPool $proxyPool = null,
     ) {
         $this->proxy ??= config('services.olx.proxy');
         $this->proxyVerify = (bool) config('services.olx.proxy_verify', $this->proxyVerify);
         $this->maxRetries = (int) config('services.olx.fetch_retries', $this->maxRetries);
+        $this->proxyPool ??= new OlxProxyPool;
     }
 
     /**
@@ -120,9 +124,12 @@ class OlxHttpClient
             ->connectTimeout((int) config('services.olx.connect_timeout', 10))
             ->withHeaders($headers);
 
-        if ($this->proxy !== null && $this->proxy !== '') {
+        $proxy = $this->proxyPool->next() ?? $this->proxy;
+        $this->lastProxy = $proxy;
+
+        if ($proxy !== null && $proxy !== '') {
             $request = $request->withOptions([
-                'proxy' => $this->proxy,
+                'proxy' => $proxy,
                 'verify' => $this->proxyVerify,
             ]);
         }
@@ -233,7 +240,8 @@ class OlxHttpClient
             'response_body_preview' => Str::squish(Str::limit($body, 500)),
             'response_body_length' => strlen($body),
             'blocked_hint' => $this->detectBlockReason($body, $responseHeaders),
-            'proxy_configured' => $this->proxy !== null && $this->proxy !== '',
+            'proxy_configured' => $this->lastProxy !== null && $this->lastProxy !== '',
+            'proxy' => $this->proxyIdentifier($this->lastProxy),
         ];
     }
 
@@ -308,6 +316,20 @@ class OlxHttpClient
     private function fingerprintId(string $userAgent): string
     {
         return substr(hash('xxh128', $userAgent.microtime(true).random_int(0, PHP_INT_MAX)), 0, 12);
+    }
+
+    private function proxyIdentifier(?string $proxy): ?string
+    {
+        if ($proxy === null || $proxy === '') {
+            return null;
+        }
+
+        $parts = parse_url($proxy);
+        if ($parts === false || ! isset($parts['host'], $parts['port'])) {
+            return null;
+        }
+
+        return "{$parts['host']}:{$parts['port']}";
     }
 
     private function shouldRetry(Response $response, int $attempt): bool
