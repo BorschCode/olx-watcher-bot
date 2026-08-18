@@ -148,6 +148,7 @@ test('proxy pool refresh replaces its list with valid downloaded endpoints', fun
             'invalid',
             'http://5.45.126.128:8080',
         ])),
+        'https://www.olx.ua/robots.txt' => Http::response('User-agent: *', 200),
     ]);
 
     $path = tempnam(sys_get_temp_dir(), 'olx-proxies-');
@@ -161,6 +162,55 @@ test('proxy pool refresh replaces its list with valid downloaded endpoints', fun
                 'socks5://149.62.186.244:1080',
                 'http://5.45.126.128:8080',
             ]);
+
+        Http::assertSentCount(3);
+    } finally {
+        unlink($path);
+    }
+});
+
+test('proxy pool refresh retains only proxies that can reach OLX', function () {
+    Http::fake([
+        'https://proxy-list.test/data.txt' => Http::response(implode(PHP_EOL, [
+            'socks5://149.62.186.244:1080',
+            'http://5.45.126.128:8080',
+        ])),
+        'https://www.olx.ua/robots.txt' => Http::sequence()
+            ->push('User-agent: *', 200)
+            ->push('blocked', 403),
+    ]);
+
+    $path = tempnam(sys_get_temp_dir(), 'olx-proxies-');
+    file_put_contents($path, 'http://old.proxy:8080');
+
+    try {
+        $pool = new OlxProxyPool(path: $path, sourceUrl: 'https://proxy-list.test/data.txt');
+
+        expect($pool->refresh())->toBe(1)
+            ->and(file($path, FILE_IGNORE_NEW_LINES))->toBe([
+                'socks5://149.62.186.244:1080',
+            ]);
+    } finally {
+        unlink($path);
+    }
+});
+
+test('proxy pool refresh preserves the existing list when no proxy passes validation', function () {
+    Http::fake([
+        'https://proxy-list.test/data.txt' => Http::response('http://5.45.126.128:8080'),
+        'https://www.olx.ua/robots.txt' => Http::response('blocked', 403),
+    ]);
+
+    $path = tempnam(sys_get_temp_dir(), 'olx-proxies-');
+    file_put_contents($path, 'http://old.proxy:8080');
+
+    try {
+        $pool = new OlxProxyPool(path: $path, sourceUrl: 'https://proxy-list.test/data.txt');
+
+        expect($pool->refresh())->toBe(0)
+            ->and(file($path, FILE_IGNORE_NEW_LINES))->toBe([
+                'http://old.proxy:8080',
+            ]);
     } finally {
         unlink($path);
     }
@@ -169,6 +219,7 @@ test('proxy pool refresh replaces its list with valid downloaded endpoints', fun
 test('proxy pool refreshes a missing list before selecting a proxy', function () {
     Http::fake([
         'https://proxy-list.test/data.txt' => Http::response('http://5.45.126.128:8080'),
+        'https://www.olx.ua/robots.txt' => Http::response('User-agent: *', 200),
     ]);
 
     $path = sys_get_temp_dir().'/olx-proxies-'.uniqid().'.txt';

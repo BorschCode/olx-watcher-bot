@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use Illuminate\Http\Client\Pool;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 
 class OlxProxyPool
@@ -9,6 +11,14 @@ class OlxProxyPool
     private const string SOURCE_URL = 'https://cdn.jsdelivr.net/gh/proxyscrape/free-proxy-list@main/proxies/all/data.txt';
 
     private const int REFRESH_INTERVAL_SECONDS = 86400;
+
+    private const string VALIDATION_URL = 'https://www.olx.ua/robots.txt';
+
+    private const int VALIDATION_TIMEOUT_SECONDS = 5;
+
+    private const int VALIDATION_CONNECT_TIMEOUT_SECONDS = 3;
+
+    private const int VALIDATION_CONCURRENCY = 25;
 
     /** @var list<string>|null */
     private ?array $proxies = null;
@@ -60,7 +70,7 @@ class OlxProxyPool
             return 0;
         }
 
-        $proxies = $this->parse(preg_split('/\R/', $response->body()) ?: []);
+        $proxies = $this->validate($this->parse(preg_split('/\R/', $response->body()) ?: []));
 
         if ($proxies === []) {
             return 0;
@@ -79,6 +89,38 @@ class OlxProxyPool
         $this->position = 0;
 
         return count($proxies);
+    }
+
+    /**
+     * @param  list<string>  $proxies
+     * @return list<string>
+     */
+    private function validate(array $proxies): array
+    {
+        if ($proxies === []) {
+            return [];
+        }
+
+        $responses = Http::pool(function (Pool $pool) use ($proxies): array {
+            return array_map(
+                fn (string $proxy) => $pool
+                    ->as($proxy)
+                    ->timeout(self::VALIDATION_TIMEOUT_SECONDS)
+                    ->connectTimeout(self::VALIDATION_CONNECT_TIMEOUT_SECONDS)
+                    ->withOptions([
+                        'proxy' => $proxy,
+                        'verify' => $this->proxyVerify(),
+                    ])
+                    ->get(self::VALIDATION_URL),
+                $proxies,
+            );
+        }, self::VALIDATION_CONCURRENCY);
+
+        return array_values(array_filter(
+            $proxies,
+            fn (string $proxy): bool => ($responses[$proxy] ?? null) instanceof Response
+                && $responses[$proxy]->successful(),
+        ));
     }
 
     public function refreshIfStale(): int
@@ -111,5 +153,10 @@ class OlxProxyPool
         return $parts !== false
             && in_array($parts['scheme'] ?? null, ['http', 'socks4', 'socks5'], true)
             && isset($parts['host'], $parts['port']);
+    }
+
+    private function proxyVerify(): bool
+    {
+        return (bool) config('services.olx.proxy_verify', true);
     }
 }
