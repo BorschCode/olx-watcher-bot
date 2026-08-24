@@ -316,6 +316,72 @@ test('refresh proxy command keeps a current proxy list', function () {
     }
 });
 
+test('proxy pool refresh returns zero when the source list cannot be downloaded', function () {
+    Http::fake([
+        'https://proxy-list.test/data.txt' => Http::failedConnection('Could not resolve host'),
+    ]);
+
+    $path = sys_get_temp_dir().'/olx-proxies-'.uniqid().'.txt';
+
+    try {
+        $pool = new OlxProxyPool(path: $path, sourceUrl: 'https://proxy-list.test/data.txt');
+
+        expect($pool->refresh())->toBe(0)
+            ->and($pool->all())->toBe([]);
+    } finally {
+        if (is_file($path)) {
+            unlink($path);
+        }
+    }
+});
+
+test('refresh proxy command reports a download failure instead of crashing', function () {
+    Http::fake([
+        '*' => Http::failedConnection('Could not resolve host'),
+    ]);
+
+    $path = storage_path('app/private/olx-proxies.txt');
+    $originalContents = is_file($path) ? file_get_contents($path) : null;
+
+    if (is_file($path)) {
+        unlink($path);
+    }
+
+    try {
+        $this->artisan('olx:refresh-proxies --force')
+            ->expectsOutput('No valid OLX proxies were downloaded.')
+            ->assertExitCode(1);
+    } finally {
+        if ($originalContents === null && is_file($path)) {
+            unlink($path);
+        } elseif ($originalContents !== null) {
+            file_put_contents($path, $originalContents);
+        }
+    }
+});
+
+test('refresh proxy command keeps existing proxies when download fails', function () {
+    Http::fake([
+        '*' => Http::failedConnection('Could not resolve host'),
+    ]);
+
+    $path = storage_path('app/private/olx-proxies.txt');
+    $originalContents = is_file($path) ? file_get_contents($path) : null;
+    file_put_contents($path, 'http://5.45.126.128:8080');
+
+    try {
+        $this->artisan('olx:refresh-proxies --force')
+            ->expectsOutput('Kept 1 existing OLX proxy.')
+            ->assertExitCode(0);
+    } finally {
+        if ($originalContents === null) {
+            unlink($path);
+        } else {
+            file_put_contents($path, $originalContents);
+        }
+    }
+});
+
 test('refresh proxy command force validates a current proxy list', function () {
     Http::fake([
         '*' => Http::response('http://5.45.126.128:8080'),
