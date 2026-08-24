@@ -7,12 +7,6 @@ services:
     env_file:
       - .env
     volumes:
-      - storage_logs:/var/www/html/storage/logs
-      - storage_app:/var/www/html/storage/app
+      - ./storage/logs:/var/www/html/storage/logs
+      - ./storage/app:/var/www/html/storage/app
     restart: unless-stopped
-
-volumes:
-  storage_logs:
-    driver: local
-  storage_app:
-    driver: local

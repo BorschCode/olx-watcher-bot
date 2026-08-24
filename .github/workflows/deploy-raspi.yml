@@ -50,10 +50,12 @@ jobs:
 
       - name: Clean workspace
         run: |
-          find "${{ github.workspace }}" -mindepth 1 -maxdepth 1 ! -name ".git" -exec rm -rf {} +
+          find "${{ github.workspace }}" -mindepth 1 -maxdepth 1 ! -name ".git" ! -name "storage" -exec rm -rf {} +
 
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          clean: false
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -162,6 +164,51 @@ jobs:
             echo "TELEGRAM_BOT_USERNAME not set; /command@bot parsing in groups may fail"
           fi
 
+      - name: Link storage onto the host
+        run: |
+          mkdir -p storage/logs storage/app/public storage/app/private
+
+          migrate_named_volume() {
+            local volume="$1"
+            local dest="$2"
+
+            if ! docker volume inspect "$volume" >/dev/null 2>&1; then
+              echo "No named volume $volume to migrate"
+              return 0
+            fi
+
+            if [ -n "$(find "$dest" -type f ! -name '.gitignore' -print -quit 2>/dev/null)" ]; then
+              echo "Keeping existing host files in $dest"
+              return 0
+            fi
+
+            echo "Copying $volume -> $dest"
+            docker run --rm --entrypoint cp \
+              -v "${volume}:/from:ro" \
+              -v "$(pwd)/${dest}:/to" \
+              "${DOCKER_USERNAME}/olx-watcher-bot:${IMAGE_TAG}" \
+              -a /from/. /to/
+          }
+
+          PROJECT="$(basename "$(pwd)")"
+          volume_name() {
+            local suffix="$1"
+            local exact="${PROJECT}_${suffix}"
+            if docker volume inspect "$exact" >/dev/null 2>&1; then
+              echo "$exact"
+              return
+            fi
+            docker volume ls -q | grep "_${suffix}$" | head -1
+          }
+
+          logs_volume="$(volume_name storage_logs)"
+          app_volume="$(volume_name storage_app)"
+          migrate_named_volume "${logs_volume:-${PROJECT}_storage_logs}" "storage/logs"
+          migrate_named_volume "${app_volume:-${PROJECT}_storage_app}" "storage/app"
+
+          echo "Host logs directory:"
+          ls -la storage/logs
+
       - name: Deploy with Docker Compose
         run: |
           echo "Using image: ${DOCKER_USERNAME}/olx-watcher-bot:${IMAGE_TAG}"
@@ -231,4 +278,6 @@ jobs:
       - name: Deployment Status
         run: |
           echo "✅ Successfully deployed ${IMAGE_TAG} to Raspberry Pi"
+          echo "Host logs (persist when Docker is stopped): $(pwd)/storage/logs"
+          ls -la storage/logs || true
           docker compose -f compose.raspberry.yml ps
