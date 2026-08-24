@@ -2,9 +2,12 @@
 
 namespace App\Support;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Pool;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class OlxProxyPool
 {
@@ -64,13 +67,29 @@ class OlxProxyPool
 
     public function refresh(): int
     {
-        $response = Http::timeout(20)->get($this->sourceUrl);
+        try {
+            $response = Http::timeout(20)
+                ->connectTimeout(5)
+                ->get($this->sourceUrl);
 
-        if (! $response->successful()) {
+            if (! $response->successful()) {
+                Log::warning('OLX proxy list download returned an unsuccessful response', [
+                    'url' => $this->sourceUrl,
+                    'status' => $response->status(),
+                ]);
+
+                return 0;
+            }
+
+            $proxies = $this->validate($this->parse(preg_split('/\R/', $response->body()) ?: []));
+        } catch (ConnectionException|RequestException $exception) {
+            Log::warning('Failed to refresh OLX proxy list', [
+                'url' => $this->sourceUrl,
+                'error' => $exception->getMessage(),
+            ]);
+
             return 0;
         }
-
-        $proxies = $this->validate($this->parse(preg_split('/\R/', $response->body()) ?: []));
 
         if ($proxies === []) {
             return 0;

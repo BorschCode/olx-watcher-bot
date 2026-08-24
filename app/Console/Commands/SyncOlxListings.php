@@ -24,6 +24,12 @@ class SyncOlxListings extends Command
 
     protected $description = 'Fetch new OLX listings for all watchers and send Telegram notifications';
 
+    public const string LAST_RUN_CACHE_KEY = 'olx:sync:last_run_at';
+
+    public const string NEXT_RUN_CACHE_KEY = 'olx:sync:next_run_at';
+
+    private const int MIN_INTERVAL_SECONDS = 3600;
+
     private const int LIMIT = 40;
 
     private const string GRAPHQL_ENDPOINT = 'https://www.olx.ua/apigateway/graphql';
@@ -96,6 +102,10 @@ GRAPHQL;
 
     public function handle(): int
     {
+        if ($this->shouldSkipScheduledRun()) {
+            return self::SUCCESS;
+        }
+
         $query = Watcher::active()->with(['filterOptions', 'category', 'city']);
 
         if ($watcherId = $this->option('watcher')) {
@@ -106,6 +116,7 @@ GRAPHQL;
 
         if ($watchers->isEmpty()) {
             $this->info('No watchers configured.');
+            $this->rememberScheduledRun();
 
             return self::SUCCESS;
         }
@@ -120,8 +131,49 @@ GRAPHQL;
         }
 
         Log::info('olx:sync finished', ['watcher_count' => $watchers->count()]);
+        $this->rememberScheduledRun();
 
         return self::SUCCESS;
+    }
+
+    private function shouldSkipScheduledRun(): bool
+    {
+        if ($this->option('watcher')) {
+            return false;
+        }
+
+        $lastRunAt = Cache::get(self::LAST_RUN_CACHE_KEY);
+
+        if ($lastRunAt !== null && (now()->timestamp - (int) $lastRunAt) < self::MIN_INTERVAL_SECONDS) {
+            $this->info('Skipped: last olx:sync run was less than 1 hour ago.');
+
+            return true;
+        }
+
+        $nextRunAt = Cache::get(self::NEXT_RUN_CACHE_KEY);
+
+        if ($nextRunAt !== null && now()->timestamp < (int) $nextRunAt) {
+            $this->info('Skipped: waiting for the next random olx:sync slot.');
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private function rememberScheduledRun(): void
+    {
+        if ($this->option('watcher')) {
+            return;
+        }
+
+        $ranAt = now()->timestamp;
+
+        Cache::forever(self::LAST_RUN_CACHE_KEY, $ranAt);
+        Cache::forever(
+            self::NEXT_RUN_CACHE_KEY,
+            $ranAt + self::MIN_INTERVAL_SECONDS + (random_int(0, 59) * 60),
+        );
     }
 
     private function syncWatcher(Watcher $watcher): void
