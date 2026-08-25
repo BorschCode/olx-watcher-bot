@@ -8,6 +8,16 @@ beforeEach(function () {
     Cache::flush();
 });
 
+test('olx:refresh-proxies is scheduled every fifteen minutes without overlapping', function () {
+    $event = collect(app(Schedule::class)->events())
+        ->first(fn ($event) => str_contains((string) $event->command, 'olx:refresh-proxies'));
+
+    expect($event)->not->toBeNull()
+        ->and($event->expression)->toBe('*/15 * * * *')
+        ->and($event->withoutOverlapping)->toBeTrue()
+        ->and($event->runInBackground)->toBeTrue();
+});
+
 test('olx:sync is scheduled every minute without overlapping', function () {
     $event = collect(app(Schedule::class)->events())
         ->first(fn ($event) => str_contains((string) $event->command, 'olx:sync'));

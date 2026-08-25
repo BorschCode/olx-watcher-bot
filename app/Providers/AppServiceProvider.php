@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Telegram\BotUsernameResolver;
+use App\Telegram\ResilientPolling;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +20,14 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->beforeResolving(Nutgram::class, function (): void {
             BotUsernameResolver::resolve();
+        });
+
+        $this->app->afterResolving(Nutgram::class, function (Nutgram $bot): void {
+            if (app()->runningUnitTests() || ! app()->runningInConsole()) {
+                return;
+            }
+
+            $bot->setRunningMode(ResilientPolling::class);
         });
     }
 
