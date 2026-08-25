@@ -195,15 +195,29 @@ GRAPHQL;
             return;
         }
 
+        if ($watcher->method === null) {
+            Log::warning('Watcher has no fetch method configured', [
+                'watcher_id' => $watcher->id,
+                'source' => $watcher->source->value,
+                'url' => $watcher->url,
+            ]);
+
+            return;
+        }
+
         $offers = match ($watcher->method) {
             HttpMethod::Get => $this->fetchViaRest($watcher),
             HttpMethod::GetHtml => $this->fetchViaHtmlLd($watcher),
             HttpMethod::Post => $this->fetchViaGraphql($watcher),
-            null => null,
         };
 
         if ($offers === null) {
-            Log::warning('Watcher fetch returned no data', ['watcher_id' => $watcher->id]);
+            Log::warning('Watcher fetch returned no data', [
+                'watcher_id' => $watcher->id,
+                'source' => $watcher->source->value,
+                'method' => $watcher->method->value,
+                'url' => $watcher->url,
+            ]);
 
             return;
         }
@@ -778,8 +792,12 @@ GRAPHQL;
         $data = json_decode($innerJson, true);
         $ads = $data['listing']['listing']['ads'] ?? null;
 
-        if (! is_array($ads) || $ads === []) {
+        if (! is_array($ads)) {
             return null;
+        }
+
+        if ($ads === []) {
+            return [];
         }
 
         return array_values(array_map(fn (array $ad): array => [

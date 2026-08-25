@@ -223,12 +223,91 @@ test('proxy pool refresh retains only proxies that can reach OLX', function () {
     try {
         $pool = new OlxProxyPool(path: $path, sourceUrl: 'https://proxy-list.test/data.txt');
 
-        expect($pool->refresh())->toBe(1)
-            ->and(file($path, FILE_IGNORE_NEW_LINES))->toBe([
+        expect($pool->refresh())->toBe(1);
+
+        $kept = file($path, FILE_IGNORE_NEW_LINES);
+
+        expect($kept)->toHaveCount(1)
+            ->and($kept[0])->toBeIn([
                 'socks5://149.62.186.244:1080',
+                'http://5.45.126.128:8080',
             ]);
     } finally {
         unlink($path);
+    }
+});
+
+test('proxy pool refresh only validates a capped number of candidate proxies', function () {
+    $proxies = [];
+
+    for ($i = 1; $i <= 40; $i++) {
+        $proxies[] = 'http://10.0.0.'.$i.':8080';
+    }
+
+    Http::fake([
+        'https://proxy-list.test/data.txt' => Http::response(implode(PHP_EOL, $proxies)),
+        'https://www.olx.ua/*' => Http::response('<html>ok</html>', 200),
+    ]);
+
+    $path = sys_get_temp_dir().'/olx-proxies-'.uniqid().'.txt';
+
+    try {
+        $pool = new OlxProxyPool(
+            path: $path,
+            sourceUrl: 'https://proxy-list.test/data.txt',
+            maxCandidates: 4,
+            maxValid: 4,
+        );
+
+        expect($pool->refresh())->toBe(4);
+
+        $validationRequests = Http::recorded(
+            fn ($request) => str_contains($request->url(), 'olx.ua'),
+        );
+
+        expect($validationRequests)->toHaveCount(4);
+    } finally {
+        if (is_file($path)) {
+            unlink($path);
+        }
+    }
+});
+
+test('proxy pool refresh stops validating after enough working proxies are found', function () {
+    $proxies = [];
+
+    for ($i = 1; $i <= 20; $i++) {
+        $proxies[] = 'http://10.0.1.'.$i.':8080';
+    }
+
+    Http::fake([
+        'https://proxy-list.test/data.txt' => Http::response(implode(PHP_EOL, $proxies)),
+        'https://www.olx.ua/*' => Http::response('<html>ok</html>', 200),
+    ]);
+
+    $path = sys_get_temp_dir().'/olx-proxies-'.uniqid().'.txt';
+
+    try {
+        $pool = new OlxProxyPool(
+            path: $path,
+            sourceUrl: 'https://proxy-list.test/data.txt',
+            maxCandidates: 20,
+            maxValid: 3,
+            validationConcurrency: 2,
+        );
+
+        expect($pool->refresh())->toBe(3);
+
+        $validationRequests = Http::recorded(
+            fn ($request) => str_contains($request->url(), 'olx.ua'),
+        );
+
+        expect($validationRequests->count())->toBeLessThanOrEqual(4)
+            ->and($validationRequests->count())->toBeGreaterThanOrEqual(3);
+    } finally {
+        if (is_file($path)) {
+            unlink($path);
+        }
     }
 });
 
