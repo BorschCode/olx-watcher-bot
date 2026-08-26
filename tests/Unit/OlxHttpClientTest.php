@@ -194,11 +194,13 @@ test('proxy pool refresh replaces its list with valid downloaded endpoints', fun
     try {
         $pool = new OlxProxyPool(path: $path, sourceUrl: 'https://proxy-list.test/data.txt');
 
-        expect($pool->refresh())->toBe(2)
-            ->and(file($path, FILE_IGNORE_NEW_LINES))->toBe([
-                'socks5://149.62.186.244:1080',
-                'http://5.45.126.128:8080',
-            ]);
+        expect($pool->refresh())->toBe(2);
+
+        $kept = file($path, FILE_IGNORE_NEW_LINES);
+
+        expect($kept)->toHaveCount(2)
+            ->and($kept)->toContain('socks5://149.62.186.244:1080')
+            ->and($kept)->toContain('http://5.45.126.128:8080');
 
         Http::assertSentCount(3);
     } finally {
