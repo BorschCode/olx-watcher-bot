@@ -484,3 +484,29 @@ test('refresh proxy command force validates a current proxy list', function () {
         }
     }
 });
+
+test('OLX client drops a failing pool proxy and retries without it', function () {
+    $path = tempnam(sys_get_temp_dir(), 'olx-proxies-');
+    file_put_contents($path, 'http://5.45.126.128:8080'.PHP_EOL);
+    $attempts = 0;
+
+    Http::fake(function () use (&$attempts) {
+        $attempts++;
+
+        return $attempts === 1
+            ? Http::failedConnection('SSL certificate problem')
+            : Http::response('<html>ok</html>', 200);
+    });
+
+    try {
+        $pool = new OlxProxyPool(path: $path);
+        $client = new OlxHttpClient(maxRetries: 2, proxyPool: $pool);
+        $response = $client->get('https://www.olx.ua/blocked', watcherId: 8);
+
+        expect($response->successful())->toBeTrue()
+            ->and($pool->all())->toBe([])
+            ->and(trim((string) file_get_contents($path)))->toBe('');
+    } finally {
+        unlink($path);
+    }
+});

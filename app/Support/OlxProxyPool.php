@@ -72,6 +72,27 @@ class OlxProxyPool
         return $this->proxies = $this->parse($lines === false ? [] : $lines);
     }
 
+    /**
+     * Drop a proxy that failed so later attempts rotate to another one or go direct.
+     */
+    public function forget(string $proxy): void
+    {
+        $remaining = array_values(array_filter(
+            $this->all(),
+            fn (string $candidate): bool => $candidate !== $proxy,
+        ));
+
+        if (count($remaining) === count($this->all())) {
+            return;
+        }
+
+        $this->proxies = $remaining;
+
+        if (is_file($this->path)) {
+            file_put_contents($this->path, $remaining === [] ? '' : implode(PHP_EOL, $remaining).PHP_EOL);
+        }
+    }
+
     public function refresh(): int
     {
         try {
