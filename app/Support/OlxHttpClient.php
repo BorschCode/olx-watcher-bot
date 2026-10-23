@@ -183,6 +183,10 @@ class OlxHttpClient
                     'exception' => $exception->getMessage(),
                 ];
 
+                if ($this->lastProxy !== null) {
+                    $this->proxyPool->forget($this->lastProxy);
+                }
+
                 if ($attempt < $this->maxRetries) {
                     Log::warning('OLX request failed, retrying with a new proxy', $logContext);
                     sleep($attempt * 2);
