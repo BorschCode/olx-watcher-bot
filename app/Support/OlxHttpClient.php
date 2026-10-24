@@ -125,13 +125,15 @@ class OlxHttpClient
     {
         $request = Http::timeout((int) config('services.olx.timeout', 20))
             ->connectTimeout((int) config('services.olx.connect_timeout', 10))
-            ->withHeaders($headers);
+            ->withHeaders($headers)
+            ->withOptions(['version' => 2.0]);
 
         $proxy = $this->proxyPool->next() ?? $this->proxy;
         $this->lastProxy = $proxy;
 
         if ($proxy !== null && $proxy !== '') {
             $request = $request->withOptions([
+                'version' => 2.0,
                 'proxy' => $proxy,
                 'verify' => $this->proxyVerify,
             ]);
