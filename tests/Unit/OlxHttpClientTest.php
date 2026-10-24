@@ -510,3 +510,9 @@ test('OLX client drops a failing pool proxy and retries without it', function ()
         unlink($path);
     }
 });
+
+test('client requests use http2 because the olx edge blocks http 1.1', function () {
+    $client = new OlxHttpClient(maxRetries: 1, proxyPool: new OlxProxyPool);
+
+    expect($client->client([])->getOptions()['version'])->toBe(2.0);
+});
