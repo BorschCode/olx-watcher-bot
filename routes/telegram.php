@@ -11,8 +11,6 @@ use App\Telegram\Handlers\TrackPriceHandler;
 use App\Telegram\Middleware\LogTelegramUpdate;
 use Illuminate\Support\Facades\Log;
 use SergiX44\Nutgram\Nutgram;
-use SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardButton;
-use SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardMarkup;
 
 $bot->middleware(LogTelegramUpdate::class);
 

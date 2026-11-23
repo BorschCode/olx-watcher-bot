@@ -18,9 +18,7 @@ class TrackPriceHandler
             'callback_data' => $bot->callbackQuery()?->data,
         ]);
 
-        $savedAd = SavedAd::where('id', $id)
-            ->where('telegram_chat_id', $chatId)
-            ->first();
+        $savedAd = SavedAd::where('id', $id)->first();
 
         if ($savedAd === null) {
             $bot->answerCallbackQuery(text: '❌ Оголошення не знайдено.');

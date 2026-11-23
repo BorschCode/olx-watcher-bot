@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\CarbonImmutable;
 use Database\Factories\PriceHistoryFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,10 +13,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $saved_ad_id
  * @property int|null $old_price
  * @property int|null $new_price
- * @property \Carbon\CarbonImmutable $changed_at
- * @property \Carbon\CarbonImmutable $created_at
- * @property \Carbon\CarbonImmutable $updated_at
- * @property-read \App\Models\SavedAd $savedAd
+ * @property CarbonImmutable $changed_at
+ * @property CarbonImmutable $created_at
+ * @property CarbonImmutable $updated_at
+ * @property-read SavedAd $savedAd
  *
  * @method static \Database\Factories\PriceHistoryFactory factory($count = null, $state = [])
  * @method static \Illuminate\Database\Eloquent\Builder<static>|PriceHistory newModelQuery()

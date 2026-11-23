@@ -4,7 +4,6 @@ namespace App\Models;
 
 use App\Enums\HttpMethod;
 use App\Enums\WatcherSource;
-use App\Models\FilterOption;
 use Database\Factories\WatcherFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -92,9 +91,6 @@ class Watcher extends Model
     /**
      * Duplicate this watcher for the given chat, resetting last_seen_id so it
      * re-notifies from the beginning of the search results.
-     *
-     * @param  string  $telegramChatId
-     * @return static
      */
     public function duplicate(string $telegramChatId): static
     {

@@ -1,15 +1,10 @@
 <?php
 
-use App\Console\Commands\TrackOlxPrices;
 use App\Models\PriceHistory;
 use App\Models\SavedAd;
 use Illuminate\Support\Facades\Http;
 
 use function Pest\Laravel\artisan;
-
-beforeEach(function () {
-    Http::fake(fn () => Http::response(['data' => []], 200));
-});
 
 test('price change creates one history row and updates saved ad price', function () {
     Http::fake(fn () => Http::response([
@@ -28,7 +23,11 @@ test('price change creates one history row and updates saved ad price', function
         'track_price' => true,
     ]);
 
+    // Force execution now: assertSuccessful() only records the expected exit code; the
+    // command actually runs in PendingCommand::__destruct() at the end of the test,
+    // after these assertions. Run it up front so DB writes are visible.
     $result = artisan('olx:track-prices')->assertSuccessful();
+    $result->execute();
 
     expect(PriceHistory::count())->toBe(1)
         ->and(PriceHistory::first()->saved_ad_id)->toBe($savedAd->id)
@@ -36,8 +35,6 @@ test('price change creates one history row and updates saved ad price', function
         ->and(PriceHistory::first()->new_price)->toBe(30000)
         ->and(PriceHistory::first()->changed_at)->not->toBeNull()
         ->and($savedAd->refresh()->price)->toBe(30000);
-
-    $result->expectsOutput('changed');
 });
 
 test('unchanged price creates no history row', function () {

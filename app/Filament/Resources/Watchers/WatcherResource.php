@@ -208,10 +208,6 @@ class WatcherResource extends Resource
                 ToggleColumn::make('is_active')
                     ->label('Активний'),
 
-                TextColumn::make('telegram_chat_id')
-                    ->label('Chat ID')
-                    ->searchable(),
-
                 TextColumn::make('source')
                     ->label('Система')
                     ->badge()
@@ -229,27 +225,6 @@ class WatcherResource extends Resource
                     ->label('Category')
                     ->sortable()
                     ->searchable(),
-
-                TextColumn::make('city.name')
-                    ->label('City')
-                    ->sortable()
-                    ->placeholder('—'),
-
-                TextColumn::make('url')
-                    ->label('URL')
-                    ->limit(45)
-                    ->copyable()
-                    ->tooltip(fn (Watcher $record): ?string => $record->url),
-
-                TextColumn::make('filterOptions.label')
-                    ->label('Filters')
-                    ->badge()
-                    ->separator(','),
-
-                TextColumn::make('last_seen_id')
-                    ->label('Last Seen ID')
-                    ->placeholder('—')
-                    ->sortable(),
             ])
             ->filters([
                 SelectFilter::make('source')
@@ -269,7 +244,7 @@ class WatcherResource extends Resource
                     ->mutateFormDataUsing(fn (array $data): array => self::normalizeFormData($data)),
                 Action::make('clone')
                     ->label('Клонувати')
-                    ->icon(Heroicon::OutlinedDuplicate)
+                    ->icon(Heroicon::OutlinedDocumentDuplicate)
                     ->form([
                         TextInput::make('telegram_chat_id')
                             ->label('Telegram Chat ID')

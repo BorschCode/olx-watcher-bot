@@ -20,7 +20,7 @@ class TrackOlxPrices extends Command
 
     public function handle(): int
     {
-        $tracked = SavedAd::where('track_price', true)->get();
+        $tracked = SavedAd::all()->filter(fn ($savedAd) => (bool) $savedAd->track_price);
 
         if ($tracked->isEmpty()) {
             $this->info('No tracked ads.');
@@ -55,7 +55,7 @@ class TrackOlxPrices extends Command
                 continue;
             }
 
-            if (!$this->option('dry-run')) {
+            if (! $this->option('dry-run')) {
                 PriceHistory::create([
                     'saved_ad_id' => $savedAd->id,
                     'old_price' => $previousPrice,
@@ -84,7 +84,6 @@ class TrackOlxPrices extends Command
         return self::SUCCESS;
     }
 
-    /** @return int|null */
     private function fetchCurrentPrice(int $olxId): ?int
     {
         try {
