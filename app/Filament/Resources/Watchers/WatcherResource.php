@@ -267,6 +267,18 @@ class WatcherResource extends Resource
             ->recordActions([
                 EditAction::make()
                     ->mutateFormDataUsing(fn (array $data): array => self::normalizeFormData($data)),
+                Action::make('clone')
+                    ->label('Клонувати')
+                    ->icon(Heroicon::OutlinedDuplicate)
+                    ->form([
+                        TextInput::make('telegram_chat_id')
+                            ->label('Telegram Chat ID')
+                            ->required()
+                            ->maxLength(255),
+                    ])
+                    ->action(function (array $data, Watcher $record): void {
+                        $record->duplicate((string) ($data['telegram_chat_id'] ?? $record->telegram_chat_id));
+                    }),
                 DeleteAction::make(),
             ])
             ->toolbarActions([

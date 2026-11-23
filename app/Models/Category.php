@@ -13,6 +13,10 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $slug
  * @property bool $sync
  * @property array<array-key, mixed>|null $options
+ * @property bool $show_location
+ * @property bool $show_rooms
+ * @property bool $show_square_meters
+ * @property bool $show_sale_date
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  * @property-read Collection<int, Listing> $listings
@@ -39,6 +43,10 @@ class Category extends Model
         'slug',
         'sync',
         'options',
+        'show_location',
+        'show_rooms',
+        'show_square_meters',
+        'show_sale_date',
     ];
 
     protected function casts(): array
@@ -46,6 +54,10 @@ class Category extends Model
         return [
             'sync' => 'boolean',
             'options' => 'array',
+            'show_location' => 'boolean',
+            'show_rooms' => 'boolean',
+            'show_square_meters' => 'boolean',
+            'show_sale_date' => 'boolean',
         ];
     }
 
