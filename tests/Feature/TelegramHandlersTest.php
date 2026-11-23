@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\SavedAd;
 use SergiX44\Nutgram\Nutgram;
 use SergiX44\Nutgram\Testing\FakeNutgram;
 
@@ -61,4 +62,30 @@ test('bot responds to save callback query', function () {
     $bot->hearCallbackQueryData('save_12345')
         ->reply()
         ->assertCalled('answerCallbackQuery');
+});
+
+test('track price toggles tracking on the saved ad', function () {
+    /** @var FakeNutgram $bot */
+    $bot = app(Nutgram::class);
+    $chatId = (string) $bot->chatId();
+
+    $ad = SavedAd::factory()->create([
+        'olx_id' => 1,
+        'telegram_chat_id' => $chatId,
+        'title' => 'Тестове оголошення',
+        'price' => 10000,
+        'track_price' => false,
+    ]);
+
+    $bot->hearCallbackQueryData("track_price_{$ad->id}")
+        ->reply()
+        ->assertCalled('answerCallbackQuery');
+
+    expect($ad->refresh()->track_price)->toBeTrue();
+
+    $bot->hearCallbackQueryData("track_price_{$ad->id}")
+        ->reply()
+        ->assertCalled('answerCallbackQuery');
+
+    expect($ad->refresh()->track_price)->toBeFalse();
 });

@@ -6,6 +6,8 @@ use App\Models\SavedAd;
 use App\Telegram\Handlers\Concerns\LogsTelegramCommand;
 use Illuminate\Support\Facades\Log;
 use SergiX44\Nutgram\Nutgram;
+use SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardButton;
+use SergiX44\Nutgram\Telegram\Types\Keyboard\InlineKeyboardMarkup;
 
 class SavedAdsHandler
 {
@@ -48,24 +50,30 @@ class SavedAdsHandler
                 return;
             }
 
-            $lines = [
-                $isAdmin
-                    ? '👑 <b>Усі збережені оголошення (адмін):</b>'
-                    : '📌 <b>Останні збережені оголошення:</b>',
-                '',
-            ];
+            $header = $isAdmin
+                ? '👑 <b>Усі збережені оголошення (адмін):</b>'
+                : '📌 <b>Останні збережені оголошення:</b>';
+
+            $bot->sendMessage(
+                text: $header,
+                parse_mode: 'HTML',
+                disable_web_page_preview: true,
+            );
 
             foreach ($ads as $index => $ad) {
                 $num = $index + 1;
                 $price = $ad->price ? number_format($ad->price, 0, '.', ' ').' грн' : 'ціна невідома';
-                $lines[] = "{$num}. <a href=\"{$ad->url}\">{$ad->title}</a> — {$price}";
-            }
+                $trackLabel = $ad->track_price ? '⏹ Припинити відстеження ціни' : '▶️ Відстежувати ціну';
 
-            $bot->sendMessage(
-                text: implode("\n", $lines),
-                parse_mode: 'HTML',
-                disable_web_page_preview: true,
-            );
+                $bot->sendMessage(
+                    text: "{$num}. <a href=\"{$ad->url}\">{$ad->title}</a> — {$price}",
+                    parse_mode: 'HTML',
+                    disable_web_page_preview: true,
+                    reply_markup: InlineKeyboardMarkup::make()->addRow(
+                        InlineKeyboardButton::make($trackLabel, callback_data: "track_price_{$ad->id}"),
+                    ),
+                );
+            }
         });
     }
 }
