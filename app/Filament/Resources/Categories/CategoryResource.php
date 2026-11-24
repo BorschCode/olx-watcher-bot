@@ -40,6 +40,18 @@ class CategoryResource extends Resource
                     ->maxLength(255),
                 Toggle::make('sync')
                     ->columnSpanFull(),
+                Toggle::make('show_location')
+                    ->label('Показувати локацію в повідомленні')
+                    ->columnSpanFull(),
+                Toggle::make('show_rooms')
+                    ->label('Показувати кількість кімнат')
+                    ->columnSpanFull(),
+                Toggle::make('show_square_meters')
+                    ->label('Показувати площу')
+                    ->columnSpanFull(),
+                Toggle::make('show_sale_date')
+                    ->label('Показувати дату продажу нерухомості')
+                    ->columnSpanFull(),
                 KeyValue::make('options')
                     ->keyLabel('Parameter')
                     ->valuePlaceholder('Value')
@@ -57,6 +69,18 @@ class CategoryResource extends Resource
                 TextColumn::make('slug')
                     ->searchable(),
                 IconColumn::make('sync')
+                    ->boolean()
+                    ->sortable(),
+                IconColumn::make('show_location')
+                    ->boolean()
+                    ->sortable(),
+                IconColumn::make('show_rooms')
+                    ->boolean()
+                    ->sortable(),
+                IconColumn::make('show_square_meters')
+                    ->boolean()
+                    ->sortable(),
+                IconColumn::make('show_sale_date')
                     ->boolean()
                     ->sortable(),
             ])

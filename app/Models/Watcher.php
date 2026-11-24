@@ -88,7 +88,37 @@ class Watcher extends Model
             ->withPivot('value_from', 'value_to');
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * Duplicate this watcher for the given chat, resetting last_seen_id so it
+     * re-notifies from the beginning of the search results.
+     */
+    public function duplicate(string $telegramChatId): static
+    {
+        $clone = new static([
+            'telegram_chat_id' => $telegramChatId,
+            'source' => $this->source,
+            'method' => $this->method,
+            'category_id' => $this->category_id,
+            'city_id' => $this->city_id,
+            'url' => $this->url,
+            'request_body' => $this->request_body,
+            'last_seen_id' => null,
+            'is_active' => $this->is_active,
+        ]);
+        $clone->save();
+
+        $clone->filterOptions()->sync(
+            $this->filterOptions->mapWithKeys(fn (FilterOption $option) => [
+                $option->id => [
+                    'value_from' => $option->pivot->value_from,
+                    'value_to' => $option->pivot->value_to,
+                ],
+            ])->all(),
+        );
+
+        return $clone;
+    }
+
     public function filterParams(): array
     {
         $params = [];
@@ -158,12 +188,18 @@ class Watcher extends Model
     {
         return Attribute::make(
             get: function (): ?string {
-                if ($this->source !== WatcherSource::Olx || $this->method !== HttpMethod::Get || $this->url === null) {
+                if ($this->source !== WatcherSource::Olx || $this->url === null) {
                     return null;
                 }
 
-                if (str_contains($this->url, '?')) {
+                // For GET HTML watchers the full search-link URL (with query params)
+                // is already stored verbatim, so return it as-is.
+                if ($this->method === HttpMethod::GetHtml || str_contains($this->url, '?')) {
                     return $this->url;
+                }
+
+                if ($this->method !== HttpMethod::Get) {
+                    return null;
                 }
 
                 $params = $this->filterParams();

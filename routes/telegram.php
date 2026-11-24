@@ -7,6 +7,7 @@ use App\Telegram\Handlers\MyIdHandler;
 use App\Telegram\Handlers\SaveAutoRiaListingHandler;
 use App\Telegram\Handlers\SavedAdsHandler;
 use App\Telegram\Handlers\SaveListingHandler;
+use App\Telegram\Handlers\TrackPriceHandler;
 use App\Telegram\Middleware\LogTelegramUpdate;
 use Illuminate\Support\Facades\Log;
 use SergiX44\Nutgram\Nutgram;
@@ -31,6 +32,7 @@ $bot->onCommand('myid', MyIdHandler::class)
 
 $bot->onCallbackQueryData('save_{olxId}', SaveListingHandler::class);
 $bot->onCallbackQueryData('save_ria_{riaId}', SaveAutoRiaListingHandler::class);
+$bot->onCallbackQueryData('track_price_{id}', TrackPriceHandler::class);
 
 $bot->fallback(function (Nutgram $bot): void {
     $update = $bot->update();

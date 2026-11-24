@@ -18,7 +18,13 @@ class SavedAdFactory extends Factory
     public function definition(): array
     {
         return [
-            //
+            'olx_id' => fake()->unique()->randomNumber(),
+            'source' => 'olx',
+            'telegram_chat_id' => fake()->numerify('chat-##########'),
+            'title' => fake()->sentence(),
+            'url' => fake()->url(),
+            'price' => fake()->randomElement([null, 10000, 30000]),
+            'track_price' => false,
         ];
     }
 }

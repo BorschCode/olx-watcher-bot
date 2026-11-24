@@ -7,3 +7,4 @@ Schedule::command('olx:refresh-proxies')
     ->withoutOverlapping(30)
     ->runInBackground();
 Schedule::command('olx:sync')->everyMinute()->withoutOverlapping();
+Schedule::command('olx:track-prices')->daily()->withoutOverlapping();

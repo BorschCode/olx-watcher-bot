@@ -903,14 +903,28 @@ GRAPHQL;
         $createdAt = $this->formatOfferDate($createdAtRaw);
         $refreshedAt = $this->formatOfferDate($offer['last_refresh_time'] ?? null);
 
+        $watcher->loadMissing('category');
+
+        $category = $watcher->category;
+        $showLocation = $category === null || $category->show_location;
+        $showRooms = $category === null || $category->show_rooms;
+        $showSquareMeters = $category === null || $category->show_square_meters;
+        $showSaleDate = $category === null || $category->show_sale_date;
+
+        $locationLine = null;
+        if ($showLocation && $watcher->city !== null) {
+            $locationLine = "📍 {$watcher->city->name}";
+        }
+
         $caption = implode("\n", array_filter([
             "🆕 <b>{$offer['title']}</b>",
             $price ? '💰 '.number_format($price, 0, '.', ' ').' грн' : null,
-            $rooms ? "🚪 Кімнат: {$rooms}" : null,
-            $totalArea ? "📐 Площа: {$totalArea}" : null,
+            $showRooms && $rooms ? "🚪 Кімнат: {$rooms}" : null,
+            $showSquareMeters && $totalArea ? "📐 Площа: {$totalArea}" : null,
+            $locationLine,
             $createdAt ? "📅 Опубліковано: {$createdAt}" : null,
             $refreshedAt && $refreshedAt !== $createdAt ? "🔄 Оновлено: {$refreshedAt}" : null,
-            $validUntil ? "⏰ Активно до: {$validUntil}" : null,
+            $showSaleDate && $validUntil ? "⏰ Активно до: {$validUntil}" : null,
             "🔗 {$offer['url']}",
             "👁 Watcher #{$watcher->id}",
         ]));

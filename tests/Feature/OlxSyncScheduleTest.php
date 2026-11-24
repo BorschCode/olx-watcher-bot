@@ -77,3 +77,12 @@ test('olx:sync --watcher ignores the hourly throttle', function () {
 
     expect(Cache::get(SyncOlxListings::LAST_RUN_CACHE_KEY))->toBe(now()->subMinutes(5)->timestamp);
 });
+
+test('olx:track-prices is scheduled daily without overlapping', function () {
+    $event = collect(app(Schedule::class)->events())
+        ->first(fn ($event) => str_contains((string) $event->command, 'olx:track-prices'));
+
+    expect($event)->not->toBeNull()
+        ->and($event->expression)->toBe('0 0 * * *')
+        ->and($event->withoutOverlapping)->toBeTrue();
+});

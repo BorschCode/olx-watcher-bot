@@ -16,6 +16,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -102,6 +103,10 @@ class SavedAdResource extends Resource
                     ->label('Ціна')
                     ->formatStateUsing(fn (?int $state): string => $state ? number_format($state, 0, '.', ' ').' грн' : '—')
                     ->sortable(),
+
+                ToggleColumn::make('track_price')
+                    ->label('Відстежувати ціну')
+                    ->alignCenter(),
 
                 TextColumn::make('images')
                     ->label('Фото')
