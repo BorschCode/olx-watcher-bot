@@ -871,6 +871,23 @@ GRAPHQL;
         return $url.$separator."min_id={$minId}";
     }
 
+    /** @return string Currency symbol for the watcher's URL (UAH → грн, USD → $, EUR → €). */
+    private function currencySymbol(Watcher $watcher): string
+    {
+        $url = $watcher->url ?? '';
+
+        if (preg_match('/[?&]currency=([^&]+)/i', $url, $m)) {
+            return match (strtoupper((string) $m[1])) {
+                'UAH' => 'грн',
+                'USD' => '$',
+                'EUR' => '€',
+                default => $m[1],
+            };
+        }
+
+        return 'грн';
+    }
+
     /** @param array<string, mixed> $offer
      * @throws \Throwable
      */
@@ -916,9 +933,11 @@ GRAPHQL;
             $locationLine = "📍 {$watcher->city->name}";
         }
 
+        $currencySymbol = $this->currencySymbol($watcher);
+
         $caption = implode("\n", array_filter([
             "🆕 <b>{$offer['title']}</b>",
-            $price ? '💰 '.number_format($price, 0, '.', ' ').' грн' : null,
+            $price ? '💰 '.number_format($price, 0, '.', ' ').$currencySymbol : null,
             $showRooms && $rooms ? "🚪 Кімнат: {$rooms}" : null,
             $showSquareMeters && $totalArea ? "📐 Площа: {$totalArea}" : null,
             $locationLine,

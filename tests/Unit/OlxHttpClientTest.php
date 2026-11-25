@@ -355,9 +355,9 @@ test('proxy pool refreshes a missing list before selecting a proxy', function ()
 });
 
 test('refresh proxy command downloads the public list', function () {
-    Http::fake([
-        '*' => Http::response('http://5.45.126.128:8080'),
-    ]);
+    $pool = Mockery::mock(OlxProxyPool::class);
+    $pool->shouldReceive('refreshIfStale')->andReturn(1);
+    $this->app->instance(OlxProxyPool::class, $pool);
 
     $path = storage_path('app/private/olx-proxies.txt');
     $originalContents = is_file($path) ? file_get_contents($path) : null;
@@ -367,6 +367,7 @@ test('refresh proxy command downloads the public list', function () {
             ->expectsOutput('Refreshed 1 OLX proxies.')
             ->assertExitCode(0);
     } finally {
+        Mockery::close();
         if ($originalContents === null && is_file($path)) {
             unlink($path);
         } elseif ($originalContents !== null) {
