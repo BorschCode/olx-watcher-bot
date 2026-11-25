@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\SavedAd;
+use App\Models\Watcher;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -25,6 +26,7 @@ class SavedAdFactory extends Factory
             'url' => fake()->url(),
             'price' => fake()->randomElement([null, 10000, 30000]),
             'track_price' => false,
+            'watcher_id' => Watcher::factory()->create(['is_active' => true, 'telegram_chat_id' => 'chat-0000000000']),
         ];
     }
 }

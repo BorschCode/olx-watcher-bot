@@ -7,6 +7,7 @@ use Database\Factories\SavedAdFactory;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -24,6 +25,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonImmutable|null $valid_until
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
+ * @property-read Watcher|null $watcher
  * @property-read Collection<int, PriceHistory> $priceHistories
  *
  * @method static SavedAdFactory factory($count = null, $state = [])
@@ -64,6 +66,11 @@ class SavedAd extends Model
             'valid_until' => 'immutable_datetime',
             'track_price' => 'boolean',
         ];
+    }
+
+    public function watcher(): BelongsTo
+    {
+        return $this->belongsTo(Watcher::class);
     }
 
     public function priceHistories(): HasMany
