@@ -77,6 +77,24 @@ class Listing extends Model
         return self::extractParamDisplayValue($offer, 'total_area');
     }
 
+    /** @param array<string, mixed> $offer */
+    public static function extractCity(array $offer): ?string
+    {
+        $city = $offer['location']['city']['name'] ?? $offer['city']['name'] ?? $offer['locationCityName'] ?? null;
+
+        if (is_string($city) && $city !== '') {
+            return $city;
+        }
+
+        $areaServed = $offer['areaServed']['name'] ?? null;
+
+        if (is_string($areaServed) && $areaServed !== '') {
+            return $areaServed;
+        }
+
+        return null;
+    }
+
     /**
      * @param  array<string, mixed>  $offer
      */
