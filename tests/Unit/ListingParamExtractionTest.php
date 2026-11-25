@@ -87,3 +87,48 @@ test('returns null when estate params are missing', function () {
     expect(Listing::extractRooms($offer))->toBeNull()
         ->and(Listing::extractTotalArea($offer))->toBeNull();
 });
+
+test('extracts city from graphql location', function () {
+    $offer = [
+        'location' => [
+            'city' => ['id' => 123, 'name' => 'Гнідин', 'normalized_name' => 'gnedin'],
+            'region' => ['id' => 32, 'name' => 'Київська область', 'normalized_name' => 'kyivska_oblast'],
+        ],
+    ];
+
+    expect(Listing::extractCity($offer))->toBe('Гнідин');
+});
+
+test('extracts city from flat city name', function () {
+    $offer = [
+        'city' => ['name' => 'Львів'],
+    ];
+
+    expect(Listing::extractCity($offer))->toBe('Львів');
+});
+
+test('extracts city from locationCityName (autoria fallback)', function () {
+    $offer = [
+        'locationCityName' => 'Одеса',
+    ];
+
+    expect(Listing::extractCity($offer))->toBe('Одеса');
+});
+
+test('extracts city from ld+json areaServed name', function () {
+    $offer = [
+        'areaServed' => ['name' => 'Жмеринка'],
+    ];
+
+    expect(Listing::extractCity($offer))->toBe('Жмеринка');
+});
+
+test('returns null when no city data present', function () {
+    $offer = [
+        'params' => [
+            ['key' => 'price', 'value' => ['value' => 5000]],
+        ],
+    ];
+
+    expect(Listing::extractCity($offer))->toBeNull();
+});

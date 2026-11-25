@@ -929,8 +929,12 @@ GRAPHQL;
         $showSaleDate = $category === null || $category->show_sale_date;
 
         $locationLine = null;
-        if ($showLocation && $watcher->city !== null) {
-            $locationLine = "📍 {$watcher->city->name}";
+        if ($showLocation) {
+            $city = Listing::extractCity($offer) ?? ($watcher->city?->name ?? null);
+
+            if ($city !== null) {
+                $locationLine = "📍 {$city}";
+            }
         }
 
         $currencySymbol = $this->currencySymbol($watcher);

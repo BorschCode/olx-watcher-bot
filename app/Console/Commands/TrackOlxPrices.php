@@ -20,7 +20,7 @@ class TrackOlxPrices extends Command
 
     public function handle(): int
     {
-        $tracked = SavedAd::all()->filter(fn ($savedAd) => (bool) $savedAd->track_price);
+        $tracked = SavedAd::all()->load('watcher')->filter(fn ($savedAd) => (bool) $savedAd->track_price);
 
         if ($tracked->isEmpty()) {
             $this->info('No tracked ads.');
@@ -75,13 +75,30 @@ class TrackOlxPrices extends Command
                 .($previousPrice ? number_format($previousPrice, 0, '.', ' ') : '—')
                 .' → '
                 .number_format($currentPrice, 0, '.', ' ')
-                .' грн'
+                .$this->currencySymbol($savedAd)
             );
         }
 
         $this->info("Done. {$checked} checked, {$changed} changed.");
 
         return self::SUCCESS;
+    }
+
+    /** @return string Currency symbol for the watched ad's URL (UAH → грн, USD → $, EUR → €). */
+    private function currencySymbol(SavedAd $savedAd): string
+    {
+        $url = $savedAd->watcher?->url ?? $savedAd->url ?? '';
+
+        if (preg_match('/[?&]currency=([^&]+)/i', $url, $m)) {
+            return match (strtoupper((string) $m[1])) {
+                'UAH' => 'грн',
+                'USD' => '$',
+                'EUR' => '€',
+                default => $m[1],
+            };
+        }
+
+        return 'грн';
     }
 
     private function fetchCurrentPrice(int $olxId): ?int
@@ -117,8 +134,9 @@ class TrackOlxPrices extends Command
 
     private function notifyPriceChange(SavedAd $savedAd, ?int $previousPrice, int $currentPrice): void
     {
-        $old = $previousPrice ? number_format($previousPrice, 0, '.', ' ').' грн' : 'невідома';
-        $new = number_format($currentPrice, 0, '.', ' ').' грн';
+        $symbol = $this->currencySymbol($savedAd);
+        $old = $previousPrice ? number_format($previousPrice, 0, '.', ' ').$symbol : 'невідома';
+        $new = number_format($currentPrice, 0, '.', ' ').$symbol;
 
         Telegram::sendMessage(
             text: implode("\n", array_filter([
