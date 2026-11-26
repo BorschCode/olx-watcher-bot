@@ -744,6 +744,8 @@ GRAPHQL;
                 'title' => $offer['name'] ?? '',
                 'url' => $offer['url'] ?? '',
                 'price_valid_until' => $offer['priceValidUntil'] ?? null,
+                'address' => $offer['address'] ?? null,
+                'areaServed' => $offer['areaServed'] ?? null,
                 'params' => [
                     ['key' => 'price', 'value' => ['value' => $offer['price'] ?? 0]],
                 ],
@@ -930,10 +932,10 @@ GRAPHQL;
 
         $locationLine = null;
         if ($showLocation) {
-            $city = Listing::extractCity($offer) ?? ($watcher->city?->name ?? null);
+            $location = Listing::extractLocation($offer) ?? ($watcher->city?->name ?? null);
 
-            if ($city !== null) {
-                $locationLine = "📍 {$city}";
+            if ($location !== null) {
+                $locationLine = "📍 {$location}";
             }
         }
 
