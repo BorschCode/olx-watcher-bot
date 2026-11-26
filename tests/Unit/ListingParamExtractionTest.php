@@ -132,3 +132,77 @@ test('returns null when no city data present', function () {
 
     expect(Listing::extractCity($offer))->toBeNull();
 });
+
+test('extracts full address line from ld+json postal address without country', function () {
+    $offer = [
+        'address' => [
+            '@type' => 'PostalAddress',
+            'streetAddress' => 'вул. Болсуновська, 13-15',
+            'addressLocality' => 'Київ',
+            'addressRegion' => 'Київська область',
+            'postalCode' => '01014',
+            'addressCountry' => 'UA',
+        ],
+    ];
+
+    expect(Listing::extractLocation($offer))->toBe('вул. Болсуновська, 13-15, Київ, Київська область, 01014');
+});
+
+test('extracts address line skipping missing parts from ld+json postal address', function () {
+    $offer = [
+        'address' => [
+            'streetAddress' => 'вул. Болсуновська, 13-15',
+            'addressLocality' => 'Київ',
+            'addressRegion' => 'Київська область',
+        ],
+    ];
+
+    expect(Listing::extractLocation($offer))->toBe('вул. Болсуновська, 13-15, Київ, Київська область');
+});
+
+test('extracts location from areaServed when no address present', function () {
+    $offer = [
+        'areaServed' => ['name' => 'Жмеринка'],
+    ];
+
+    expect(Listing::extractLocation($offer))->toBe('Жмеринка');
+});
+
+test('extracts graphql city and region without search-area city alone', function () {
+    $offer = [
+        'location' => [
+            'city' => ['id' => 123, 'name' => 'Гостомель', 'normalized_name' => 'gomel'],
+            'region' => ['id' => 32, 'name' => 'Київська область', 'normalized_name' => 'kyivska_oblast'],
+        ],
+    ];
+
+    expect(Listing::extractLocation($offer))->toBe('Гостомель, Київська область');
+});
+
+test('extracts graphql city alone when region missing', function () {
+    $offer = [
+        'location' => [
+            'city' => ['id' => 123, 'name' => 'Гнідин', 'normalized_name' => 'gnedin'],
+        ],
+    ];
+
+    expect(Listing::extractLocation($offer))->toBe('Гнідин');
+});
+
+test('extracts flat city name fallback', function () {
+    $offer = [
+        'city' => ['name' => 'Львів'],
+    ];
+
+    expect(Listing::extractLocation($offer))->toBe('Львів');
+});
+
+test('returns null when no location data present', function () {
+    $offer = [
+        'params' => [
+            ['key' => 'price', 'value' => ['value' => 5000]],
+        ],
+    ];
+
+    expect(Listing::extractLocation($offer))->toBeNull();
+});
