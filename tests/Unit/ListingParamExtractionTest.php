@@ -189,6 +189,18 @@ test('extracts graphql city alone when region missing', function () {
     expect(Listing::extractLocation($offer))->toBe('Гнідин');
 });
 
+test('extracts olx prerendered location.settlement with region', function () {
+    $offer = [
+        'location' => [
+            'settlement' => 'Білогородка',
+            'region' => 'Київська область',
+            'country' => 'Україна',
+        ],
+    ];
+
+    expect(Listing::extractLocation($offer))->toBe('Білогородка, Київська область');
+});
+
 test('extracts flat city name fallback', function () {
     $offer = [
         'city' => ['name' => 'Львів'],

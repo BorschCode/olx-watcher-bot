@@ -132,9 +132,10 @@ class Listing extends Model
             return $areaServed;
         }
 
-        // 3. GraphQL: actual city + region (not the search-area city alone).
-        $city = $offer['location']['city']['name'] ?? null;
-        $region = $offer['location']['region']['name'] ?? null;
+        // 3. GraphQL / OLX prerendered: actual city + region (not the search-area city alone).
+        // Supports both GraphQL shape location.city.name and OLX HTML shape location.settlement.
+        $city = $offer['location']['city']['name'] ?? $offer['location']['settlement'] ?? null;
+        $region = $offer['location']['region']['name'] ?? $offer['location']['region'] ?? null;
 
         if (is_string($city) && $city !== '') {
             return is_string($region) && $region !== ''
