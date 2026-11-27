@@ -809,6 +809,10 @@ GRAPHQL;
             'created_time' => $ad['createdTime'] ?? null,
             'last_refresh_time' => $ad['lastRefreshTime'] ?? null,
             'price_valid_until' => $ad['validToTime'] ?? null,
+            'address' => $ad['address'] ?? null,
+            'areaServed' => $ad['areaServed'] ?? null,
+            'location' => $ad['location'] ?? null,
+            'city' => $ad['city'] ?? null,
             'params' => $this->buildParamsFromPrerenderedAd($ad),
             'photos' => array_map(
                 fn (string $url) => ['link' => $url],
@@ -930,11 +934,11 @@ GRAPHQL;
         $showSquareMeters = $category === null || $category->show_square_meters;
         $showSaleDate = $category === null || $category->show_sale_date;
 
-        $locationLine = null;
+        $locationLine = '📍 нерозпінано';
         if ($showLocation) {
-            $location = Listing::extractLocation($offer) ?? ($watcher->city?->name ?? null);
+            $location = Listing::extractLocation($offer) ?? $watcher->city?->name ?? 'нерозпінано';
 
-            if ($location !== null) {
+            if ($location !== 'нерозпінано') {
                 $locationLine = "📍 {$location}";
             }
         }
