@@ -934,11 +934,11 @@ GRAPHQL;
         $showSquareMeters = $category === null || $category->show_square_meters;
         $showSaleDate = $category === null || $category->show_sale_date;
 
-        $locationLine = null;
+        $locationLine = '📍 нерозпінано';
         if ($showLocation) {
-            $location = Listing::extractLocation($offer) ?? ($watcher->city?->name ?? null);
+            $location = Listing::extractLocation($offer) ?? $watcher->city?->name ?? 'нерозпінано';
 
-            if ($location !== null) {
+            if ($location !== 'нерозпінано') {
                 $locationLine = "📍 {$location}";
             }
         }
