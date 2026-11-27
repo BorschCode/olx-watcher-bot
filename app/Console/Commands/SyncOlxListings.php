@@ -809,6 +809,10 @@ GRAPHQL;
             'created_time' => $ad['createdTime'] ?? null,
             'last_refresh_time' => $ad['lastRefreshTime'] ?? null,
             'price_valid_until' => $ad['validToTime'] ?? null,
+            'address' => $ad['address'] ?? null,
+            'areaServed' => $ad['areaServed'] ?? null,
+            'location' => $ad['location'] ?? null,
+            'city' => $ad['city'] ?? null,
             'params' => $this->buildParamsFromPrerenderedAd($ad),
             'photos' => array_map(
                 fn (string $url) => ['link' => $url],

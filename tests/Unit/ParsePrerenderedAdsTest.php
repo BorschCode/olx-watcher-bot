@@ -42,3 +42,29 @@ HTML;
         ->and(Listing::extractRooms($ads[0]))->toBe('2')
         ->and(Listing::extractTotalArea($ads[0]))->toBe('45 м²');
 });
+
+test('carries address field from prerendered state', function () {
+    $html = <<<'HTML'
+<html><body><script>
+window.__PRERENDERED_STATE__ = "{\"listing\":{\"listing\":{\"ads\":[{\"id\":111,\"title\":\"Test flat\",\"url\":\"https://example.com\",\"address\":{\"streetAddress\":\"вул. Ширма, 1\",\"addressLocality\":\"Київ\",\"addressRegion\":\"Київська область\"},\"photos\":[]}]}}}"
+</script></body></html>
+HTML;
+
+    $ads = parsePrerenderedAdsFromHtml($html);
+
+    expect($ads)->toHaveCount(1)
+        ->and(Listing::extractLocation($ads[0]))->toBe('вул. Ширма, 1, Київ, Київська область');
+});
+
+test('carries location field from prerendered state', function () {
+    $html = <<<'HTML'
+<html><body><script>
+window.__PRERENDERED_STATE__ = "{\"listing\":{\"listing\":{\"ads\":[{\"id\":222,\"title\":\"Test house\",\"url\":\"https://example.com\",\"location\":{\"city\":{\"name\":\"ГостOMEL\"},\"region\":{\"name\":\"Київська область\"}},\"photos\":[]}]}}}"
+</script></body></html>
+HTML;
+
+    $ads = parsePrerenderedAdsFromHtml($html);
+
+    expect($ads)->toHaveCount(1)
+        ->and(Listing::extractLocation($ads[0]))->toBe('ГостOMEL, Київська область');
+});
